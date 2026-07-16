@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - Log Server</title>
+  <style>
+    :root {
+      --bg: #0d0d0d; --bg-2: #141414; --bg-3: #1a1a1a; --border: #2a2a2a;
+      --text: #f0f0f0; --muted: #888888; --accent: #3b82f6;
+      --radius: 8px;
+    }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg); color: var(--text);
+      display: flex; align-items: center; justify-content: center; height: 100vh;
+    }
+    .auth-card {
+      background: var(--bg-2); border: 1px solid var(--border);
+      padding: 32px; border-radius: var(--radius); width: 100%; max-width: 400px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .auth-header { text-align: center; margin-bottom: 24px; }
+    .auth-header h1 { margin: 0; font-size: 24px; font-weight: 700; }
+    .auth-header p { color: var(--muted); margin: 8px 0 0; font-size: 14px; }
+    
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+    .form-group input {
+      width: 100%; padding: 10px 12px; background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); outline: none; box-sizing: border-box;
+    }
+    .form-group input:focus { border-color: var(--accent); }
+    
+    .btn {
+      width: 100%; padding: 12px; background: var(--accent); color: white;
+      border: none; border-radius: 6px; font-weight: 600; cursor: pointer;
+      transition: opacity 0.2s; font-size: 15px;
+    }
+    .btn:hover { opacity: 0.9; }
+    
+    .auth-footer {
+      margin-top: 20px; text-align: center; font-size: 14px; color: var(--muted);
+    }
+    .auth-footer a { color: var(--accent); text-decoration: none; cursor: pointer; }
+    .auth-footer a:hover { text-decoration: underline; }
+    
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+      border-radius: 6px; color: white; font-size: 14px; display: none;
+      animation: slideIn 0.3s ease-out; z-index: 100;
+    }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    .toast.error { background: #ef4444; }
+    .toast.success { background: #22c55e; }
+  </style>
+</head>
+<body>
+
+  <div class="auth-card" id="loginBox">
+    <div class="auth-header">
+      <h1>Welcome Back</h1>
+      <p>Please enter your details to sign in</p>
+    </div>
+    <form id="loginForm">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="loginUser" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="loginPass" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn">Sign In</button>
+    </form>
+    <div class="auth-footer">
+      Don't have an account? <a onclick="toggleAuth()">Create one</a>
+    </div>
+  </div>
+
+  <div class="auth-card" id="signupBox" style="display: none;">
+    <div class="auth-header">
+      <h1>Create Account</h1>
+      <p>Join us to start managing your logs</p>
+    </div>
+    <form id="signupForm">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="signupUser" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="signupPass" required autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn">Sign Up</button>
+    </form>
+    <div class="auth-footer">
+      Already have an account? <a onclick="toggleAuth()">Sign in</a>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    function toggleAuth() {
+      const loginBox = document.getElementById('loginBox');
+      const signupBox = document.getElementById('signupBox');
+      if (loginBox.style.display === 'none') {
+        loginBox.style.display = 'block';
+        signupBox.style.display = 'none';
+      } else {
+        loginBox.style.display = 'none';
+        signupBox.style.display = 'block';
+      }
+    }
+
+    function showToast(msg, type = 'error') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 4000);
+    }
+
+    async function api(url, data) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Request failed');
+      return json;
+    }
+
+    document.getElementById('loginForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api('/api/login', {
+          username: document.getElementById('loginUser').value,
+          password: document.getElementById('loginPass').value
+        });
+        window.location.href = '/';
+      } catch (err) {
+        showToast(err.message);
+      }
+    };
+
+    document.getElementById('signupForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api('/api/signup', {
+          username: document.getElementById('signupUser').value,
+          password: document.getElementById('signupPass').value
+        });
+        showToast('Account created! Please sign in.', 'success');
+        toggleAuth();
+      } catch (err) {
+        showToast(err.message);
+      }
+    };
+  </script>
+</body>
+</html>

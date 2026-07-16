@@ -1,0 +1,303 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"log-server/internal/database"
+	"log-server/internal/models"
+)
+
+// ----- Log Handlers -----
+
+type logCreateReq struct {
+	Message    string `json:"message"`
+	Level      string `json:"level"`
+	CategoryID int64  `json:"category_id"`
+	Pinned     bool   `json:"pinned"`
+}
+
+func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	var req logCreateReq
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.Message = strings.TrimSpace(req.Message)
+	if req.Message == "" {
+		writeError(w, http.StatusBadRequest, "message required")
+		return
+	}
+	if len(req.Message) > 10000 {
+		writeError(w, http.StatusBadRequest, "message too long")
+		return
+	}
+	if !models.IsValidLevel(req.Level) {
+		writeError(w, http.StatusBadRequest, "invalid level")
+		return
+	}
+	if req.CategoryID <= 0 {
+		writeError(w, http.StatusBadRequest, "category required")
+		return
+	}
+	if _, err := s.db.GetCategory(r.Context(), req.CategoryID); err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusBadRequest, "unknown category")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
+	l := &models.Log{
+		UserID:     userID,
+		Message:    req.Message,
+		Level:      req.Level,
+		CategoryID: req.CategoryID,
+		Pinned:     req.Pinned,
+	}
+	full, err := s.db.CreateLogAndGet(r.Context(), l)
+	if err != nil {
+		slog.Error("create log", "err", err)
+		writeError(w, http.StatusInternalServerError, "create failed")
+		return
+	}
+	s.broker.Publish("log.created", full)
+	if full.Level == models.LevelError || full.Level == models.LevelCritical {
+		s.broker.Publish("log.alert", full)
+	}
+	// Print formatted log entry to terminal
+	printLogEntry(full.Level, full.CategoryName, full.Message)
+	writeJSON(w, http.StatusCreated, full)
+}
+
+func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	id, err := paramID(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req logCreateReq
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.Message = strings.TrimSpace(req.Message)
+	if req.Message == "" {
+		writeError(w, http.StatusBadRequest, "message required")
+		return
+	}
+	if !models.IsValidLevel(req.Level) {
+		writeError(w, http.StatusBadRequest, "invalid level")
+		return
+	}
+	if req.CategoryID <= 0 {
+		writeError(w, http.StatusBadRequest, "category required")
+		return
+	}
+	existing, err := s.db.GetLog(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	if existing.UserID != userID {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	upd := existing
+	upd.Message = req.Message
+	upd.Level = req.Level
+	upd.CategoryID = req.CategoryID
+	// Preserve existing attachment unless explicitly cleared elsewhere.
+	full, err := s.db.UpdateLogAndGet(r.Context(), &upd)
+	if err != nil {
+		slog.Error("update log", "err", err)
+		writeError(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+	s.broker.Publish("log.updated", full)
+	writeJSON(w, http.StatusOK, full)
+}
+
+func (s *Server) handleDeleteLog(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	id, err := paramID(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	existing, err := s.db.GetLog(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	if existing.UserID != userID {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	attachPath, err := s.db.DeleteLog(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		slog.Error("delete log", "err", err)
+		writeError(w, http.StatusInternalServerError, "delete failed")
+		return
+	}
+	if attachPath != "" {
+		_ = tryRemoveFile(attachPath)
+	}
+	s.broker.Publish("log.deleted", map[string]any{"id": id})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleTogglePin(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	id, err := paramID(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	existing, err := s.db.GetLog(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	if existing.UserID != userID {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	pinned, full, err := s.db.TogglePinAndGet(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "toggle failed")
+		return
+	}
+	s.broker.Publish("log.pinned", full)
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "pinned": pinned, "log": full})
+}
+
+func (s *Server) handleGetLog(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	id, err := paramID(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	l, err := s.db.GetLog(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	if l.UserID != userID {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	writeJSON(w, http.StatusOK, l)
+}
+
+func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	f := models.Filter{
+		UserID: userID,
+		Search: strings.TrimSpace(r.URL.Query().Get("q")),
+		Level:  strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("level"))),
+	}
+	if cid := r.URL.Query().Get("category_id"); cid != "" {
+		if v, err := strconv.ParseInt(cid, 10, 64); err == nil {
+			f.CategoryID = v
+		}
+	}
+	f.Limit = 500
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < 2000 {
+			f.Limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			f.Offset = n
+		}
+	}
+
+	// Add a timeout to prevent long-running queries from blocking
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	logs, total, err := s.db.ListLogs(ctx, f)
+	if err != nil {
+		slog.Warn("list logs", "err", err)
+		writeError(w, http.StatusInternalServerError, "list failed")
+		return
+	}
+	if logs == nil {
+		logs = []models.Log{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"logs":  logs,
+		"total": total,
+		"time":  time.Now().UTC().Unix(),
+	})
+}
+
+// printLogEntry prints a formatted log entry to the terminal with colors.
+func printLogEntry(level, category, message string) {
+	if category == "" {
+		category = "General"
+	}
+	// Truncate message if too long
+	if len(message) > 60 {
+		message = message[:57] + "..."
+	}
+	// Use ANSI colors for terminal output
+	var colorCode string
+	switch level {
+	case "DEBUG":
+		colorCode = "\033[90m" // Gray
+	case "INFO":
+		colorCode = "\033[32m" // Green
+	case "WARNING":
+		colorCode = "\033[33m" // Yellow
+	case "ERROR":
+		colorCode = "\033[31m" // Red
+	case "CRITICAL":
+		colorCode = "\033[91m" // Bright Red
+	default:
+		colorCode = "\033[0m"
+	}
+	reset := "\033[0m"
+	timestamp := time.Now().Format("15:04:05")
+	// Pad level for alignment
+	levelPadded := fmt.Sprintf("%-8s", level)
+	fmt.Printf("%s%s %s[%s]%s %s%s\n", colorCode, timestamp, levelPadded, category, reset, message, reset)
+}
