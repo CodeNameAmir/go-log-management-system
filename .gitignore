@@ -1,0 +1,32 @@
+# Compiled binaries
+log-server.exe
+*.exe~
+
+# Database files
+logs.db
+*.db
+
+# Log and data files
+*.json
+!web/templates/
+!internal/
+
+# Cookie/test files
+cookies*.txt
+test_*.txt
+test_*.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+*~
