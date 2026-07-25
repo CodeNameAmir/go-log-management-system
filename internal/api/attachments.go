@@ -13,18 +13,6 @@ import (
 	"log-server/internal/database"
 )
 
-// Allowed extensions and their MIME hints for upload validation.
-var allowedExts = map[string]string{
-	".png":  "image/png",
-	".jpg":  "image/jpeg",
-	".jpeg": "image/jpeg",
-	".gif":  "image/gif",
-	".webp": "image/webp",
-	".pdf":  "application/pdf",
-	".txt":  "text/plain",
-	".zip":  "application/zip",
-}
-
 func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) {
 	id, err := paramID(r, "id")
 	if err != nil {
@@ -33,7 +21,7 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Verify log exists.
-	if _, err := s.db.GetLog(r.Context(), id); err != nil {
+	if _, err := s.getDB(r).GetLog(r.Context(), id); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "log not found")
 			return
@@ -42,9 +30,9 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Limit request size.
-	r.Body = http.MaxBytesReader(w, r.Body, s.maxUpload)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	// Limit request size - removed limit for unlimited uploads.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<63-1)
+	if err := r.ParseMultipartForm(1 << 30); err != nil {
 		writeError(w, http.StatusBadRequest, "file too large or invalid upload")
 		return
 	}
@@ -54,13 +42,6 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	defer file.Close()
-
-	// Validate extension.
-	ext := strings.ToLower(filepath.Ext(hdr.Filename))
-	if _, ok := allowedExts[ext]; !ok {
-		writeError(w, http.StatusBadRequest, "file type not allowed")
-		return
-	}
 
 	// Read a small prefix to sniff magic bytes for extra safety.
 	magic := make([]byte, 512)
@@ -81,11 +62,6 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 	safeName := database.SafeFileName(hdr.Filename)
 	if safeName == "" || safeName == "." {
 		writeError(w, http.StatusBadRequest, "invalid filename")
-		return
-	}
-	// Ensure the sanitized name still has the allowed extension.
-	if ext := strings.ToLower(filepath.Ext(safeName)); ext == "" {
-		writeError(w, http.StatusBadRequest, "file must have an extension")
 		return
 	}
 
@@ -131,7 +107,7 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 	totalSize := int64(n) + written
 
 	// Remove any previous attachment on this log.
-	oldPath, err := s.db.ClearAttachment(r.Context(), id)
+	oldPath, err := s.getDB(r).ClearAttachment(r.Context(), id)
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		slog.Warn("clear old attachment", "err", err)
 	}
@@ -139,14 +115,14 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 		_ = tryRemoveFile(oldPath)
 	}
 
-	if err := s.db.SetAttachment(r.Context(), id, hdr.Filename, safeName, totalSize); err != nil {
+	if err := s.getDB(r).SetAttachment(r.Context(), id, hdr.Filename, safeName, totalSize); err != nil {
 		_ = os.Remove(dstPath)
 		slog.Error("set attachment", "err", err)
 		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
 
-	full, _ := s.db.GetLog(r.Context(), id)
+	full, _ := s.getDB(r).GetLog(r.Context(), id)
 	s.broker.Publish("log.updated", full)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":   true,
@@ -163,7 +139,7 @@ func (s *Server) handleDeleteAttachment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	oldPath, err := s.db.ClearAttachment(r.Context(), id)
+	oldPath, err := s.getDB(r).ClearAttachment(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "log not found")
@@ -175,7 +151,7 @@ func (s *Server) handleDeleteAttachment(w http.ResponseWriter, r *http.Request) 
 	if oldPath != "" {
 		_ = tryRemoveFile(oldPath)
 	}
-	full, _ := s.db.GetLog(r.Context(), id)
+	full, _ := s.getDB(r).GetLog(r.Context(), id)
 	s.broker.Publish("log.updated", full)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "log": full})
 }

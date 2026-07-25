@@ -55,7 +55,7 @@ func main() {
 	dbPath := flag.String("db", "logs.db", "SQLite database file path (or Turso URL like libsql://...)")
 	dbToken := flag.String("db-token", "", "Turso authentication token (for remote databases)")
 	uploadDir := flag.String("uploads", "uploads", "Directory for uploaded files")
-	maxUpload := flag.Int64("max-upload", 10<<20, "Max upload size in bytes (default 10 MiB)")
+	maxUpload := flag.Int64("max-upload", 1<<30, "Max upload size in bytes (default 1 GiB)")
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
 	serverAddr = *addr
@@ -98,6 +98,20 @@ func main() {
 	defer db.Close()
 	printSuccess("Database: Connected (%s)", *dbPath)
 
+	// Open Turso database (if configured)
+	var dbTurso *database.DB
+	tursoURL := "libsql://test-codenameamir.aws-ap-northeast-1.turso.io"
+	tursoToken := "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiIwZWNlN2NiMS0yYzliLTQwNWUtOTBmNi1mMjE5ZGExMDQ1MjQiLCJpYXQiOjE3ODMxNjM1OTIsImtpZCI6IjBzNTZfOGFGa3l3Q0tKX09nbG5WejFNdTUzQWp3TWRIdERZUmQtbkJHQjQiLCJyaWQiOiJmNjM0NjI3Yi1iNzBkLTQ1NWEtYTc0Yi02NDk2Njc2Y2U0ZDUifQ.F5XJjdcIRLHGsmmiKhZ3wZFZeKrv5yb8SKXDSEkDDP6G1ql1Tj1PSyTzBx3fk50RJdZK5MzzCxKIXaRyFgmaBw"
+	tursoDSN := fmt.Sprintf("%s?authToken=%s", tursoURL, tursoToken)
+
+	dbTurso, err2 := database.Open(tursoDSN)
+	if err2 != nil {
+		printWarn("Turso database not available (%v). Only local DB will be used.", err2)
+	} else {
+		defer dbTurso.Close()
+		printSuccess("Database: Connected (%s)", tursoURL)
+	}
+
 	broker := api.NewBroker()
 	defer broker.Stop()
 	printSuccess("Real-time: Enabled (SSE)")
@@ -108,7 +122,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := api.NewServer(db, broker, api.Config{
+	srv := api.NewServer(db, dbTurso, broker, api.Config{
 		UploadDir: *uploadDir,
 		MaxUpload: *maxUpload,
 		WebFS:     web,

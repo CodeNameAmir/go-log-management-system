@@ -23,6 +23,7 @@ type Server struct {
 	uploadDir string
 	maxUpload int64
 	db        *database.DB
+	dbTurso   *database.DB
 	sessions  *SessionManager
 }
 
@@ -34,9 +35,9 @@ type Config struct {
 }
 
 // NewServer constructs a Server with all routes registered.
-func NewServer(db *database.DB, broker *Broker, cfg Config) *Server {
+func NewServer(db *database.DB, dbTurso *database.DB, broker *Broker, cfg Config) *Server {
 	if cfg.MaxUpload <= 0 {
-		cfg.MaxUpload = 10 << 20 // 10 MiB
+		cfg.MaxUpload = 1 << 30 // 1 GiB
 	}
 	if cfg.UploadDir == "" {
 		cfg.UploadDir = "uploads"
@@ -49,7 +50,14 @@ func NewServer(db *database.DB, broker *Broker, cfg Config) *Server {
 		uploadDir: cfg.UploadDir,
 		maxUpload: cfg.MaxUpload,
 		db:        db,
+		dbTurso:  dbTurso,
 		sessions:  NewSessionManager(),
+	}
+
+	// When Turso DB is not available, use local DB for everything.
+	// The auth handler will still allow selection via session.
+	if s.dbTurso == nil {
+		s.dbTurso = db
 	}
 
 	if err := os.MkdirAll(cfg.UploadDir, 0o755); err != nil {
@@ -232,4 +240,20 @@ func paramID(r *http.Request, key string) (int64, error) {
 		return 0, fmt.Errorf("invalid %s", key)
 	}
 	return id, nil
+}
+
+// getDB returns the appropriate database based on the session's DB type.
+func (s *Server) getDB(r *http.Request) *database.DB {
+	cookie, err := r.Cookie(sessionKey)
+	if err != nil {
+		return s.db
+	}
+	session, ok := s.sessions.GetSession(cookie.Value)
+	if !ok {
+		return s.db
+	}
+	if session.DBType == "turso" {
+		return s.dbTurso
+	}
+	return s.db
 }
