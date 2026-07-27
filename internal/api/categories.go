@@ -19,7 +19,7 @@ type categoryReq struct {
 }
 
 func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
-	cats, err := s.db.ListCategories(r.Context())
+	cats, err := s.getDB(r).ListCategories(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list failed")
 		return
@@ -45,7 +45,7 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	if !colorHexRe.MatchString(req.Color) {
 		req.Color = "#3b82f6"
 	}
-	id, err := s.db.CreateCategory(r.Context(), req.Name, req.Color)
+	id, err := s.getDB(r).CreateCategory(r.Context(), req.Name, req.Color)
 	if err != nil {
 		if errors.Is(err, database.ErrDuplicate) {
 			writeError(w, http.StatusConflict, "category already exists")
@@ -55,7 +55,7 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "create failed")
 		return
 	}
-	cat, _ := s.db.GetCategory(r.Context(), id)
+	cat, _ := s.getDB(r).GetCategory(r.Context(), id)
 	s.broker.Publish("category.created", cat)
 	writeJSON(w, http.StatusCreated, cat)
 }
@@ -80,7 +80,7 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 	if !colorHexRe.MatchString(req.Color) {
 		req.Color = "#3b82f6"
 	}
-	if err := s.db.UpdateCategory(r.Context(), id, req.Name, req.Color); err != nil {
+	if err := s.getDB(r).UpdateCategory(r.Context(), id, req.Name, req.Color); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
 			return
@@ -93,7 +93,7 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
-	cat, _ := s.db.GetCategory(r.Context(), id)
+	cat, _ := s.getDB(r).GetCategory(r.Context(), id)
 	s.broker.Publish("category.updated", cat)
 	writeJSON(w, http.StatusOK, cat)
 }
@@ -104,7 +104,7 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.db.DeleteCategory(r.Context(), id); err != nil {
+	if err := s.getDB(r).DeleteCategory(r.Context(), id); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
 			return

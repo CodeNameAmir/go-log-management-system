@@ -16,6 +16,39 @@ import (
 	"log-server/internal/models"
 )
 
+// Storer is the contract every backing store must satisfy so the HTTP layer
+// can transparently talk to local SQLite, libsql (Turso) or Supabase PostgREST.
+//
+// All implementers (DB for SQLite/libsql and supabase.Client for Postgres via
+// PostgREST) expose the same methods; the chosen backend is decided per
+// request via the SessionManager.
+type Storer interface {
+	Close() error
+	ListCategories(ctx context.Context) ([]models.Category, error)
+	GetCategory(ctx context.Context, id int64) (models.Category, error)
+	CreateCategory(ctx context.Context, name, color string) (int64, error)
+	UpdateCategory(ctx context.Context, id int64, name, color string) error
+	DeleteCategory(ctx context.Context, id int64) error
+	CreateLog(ctx context.Context, l *models.Log) (int64, error)
+	CreateLogAndGet(ctx context.Context, l *models.Log) (models.Log, error)
+	UpdateLog(ctx context.Context, l *models.Log) error
+	DeleteLog(ctx context.Context, id int64) (string, error)
+	TogglePin(ctx context.Context, id int64) (bool, error)
+	TogglePinAndGet(ctx context.Context, id int64) (bool, models.Log, error)
+	UpdateLogAndGet(ctx context.Context, l *models.Log) (models.Log, error)
+	GetLog(ctx context.Context, id int64) (models.Log, error)
+	ListLogs(ctx context.Context, f models.Filter) ([]models.Log, int, error)
+	SetAttachment(ctx context.Context, logID int64, name, path string, size int64) error
+	ClearAttachment(ctx context.Context, logID int64) (string, error)
+	Stats(ctx context.Context, userID int64) (models.Stats, error)
+	CreateUser(ctx context.Context, username, passwordHash string) (int64, error)
+	GetUserByUsername(ctx context.Context, username string) (models.User, error)
+	GetUserByID(ctx context.Context, id int64) (models.User, error)
+}
+
+// Compile-time assertion: *DB implements Storer.
+var _ Storer = (*DB)(nil)
+
 // DB wraps a *sql.DB with prepared statements for common operations.
 type DB struct {
 	conn *sql.DB
@@ -410,7 +443,18 @@ func (db *DB) CreateCategory(ctx context.Context, name, color string) (int64, er
 		}
 		return 0, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil || id == 0 {
+		// libsql remote fallback
+		var fallbackID int64
+		if err2 := db.conn.QueryRowContext(ctx,
+			`SELECT id FROM categories WHERE name = ? AND created_at = ? ORDER BY id DESC LIMIT 1`,
+			name, now).Scan(&fallbackID); err2 != nil {
+			return 0, fmt.Errorf("create category: %w (fallback also failed: %v)", err, err2)
+		}
+		return fallbackID, nil
+	}
+	return id, nil
 }
 
 // UpdateCategory updates name/color.
@@ -423,8 +467,12 @@ func (db *DB) UpdateCategory(ctx context.Context, id int64, name, color string) 
 		return err
 	}
 	n, _ := res.RowsAffected()
+	// libsql remote may return 0 rows affected even on success
 	if n == 0 {
-		return ErrNotFound
+		var exists bool
+		if err := db.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM categories WHERE id = ?)`, id).Scan(&exists); err != nil || !exists {
+			return ErrNotFound
+		}
 	}
 	return nil
 }
@@ -440,7 +488,10 @@ func (db *DB) DeleteCategory(ctx context.Context, id int64) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return ErrNotFound
+		var exists bool
+		if err := db.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM categories WHERE id = ?)`, id).Scan(&exists); err != nil || !exists {
+			return ErrNotFound
+		}
 	}
 	return nil
 }
@@ -454,9 +505,9 @@ func (db *DB) CreateLog(ctx context.Context, l *models.Log) (int64, error) {
 	if l.Pinned {
 		pinned = 1
 	}
-	var uID sql.NullInt64
-	if l.UserID > 0 {
-		uID.Int64 = l.UserID
+	var uID sql.NullString
+	if l.UserID != "" {
+		uID.String = l.UserID
 		uID.Valid = true
 	}
 	res, err := db.stmtInsertLog.ExecContext(ctx,
@@ -466,7 +517,18 @@ func (db *DB) CreateLog(ctx context.Context, l *models.Log) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil || id == 0 {
+		// libsql remote doesn't support LastInsertId, use RETURNING fallback
+		var fallbackID int64
+		err2 := db.conn.QueryRowContext(ctx,
+			`SELECT id FROM logs WHERE message = ? AND created_at = ? ORDER BY id DESC LIMIT 1`,
+			l.Message, now).Scan(&fallbackID)
+		if err2 != nil {
+			return 0, fmt.Errorf("create log: %w (fallback also failed: %v)", err, err2)
+		}
+		return fallbackID, nil
+	}
 	return id, nil
 }
 
@@ -478,9 +540,9 @@ func (db *DB) CreateLogAndGet(ctx context.Context, l *models.Log) (models.Log, e
 	if l.Pinned {
 		pinned = 1
 	}
-	var uID sql.NullInt64
-	if l.UserID > 0 {
-		uID.Int64 = l.UserID
+	var uID sql.NullString
+	if l.UserID != "" {
+		uID.String = l.UserID
 		uID.Valid = true
 	}
 	res, err := db.stmtInsertLog.ExecContext(ctx,
@@ -492,9 +554,18 @@ func (db *DB) CreateLogAndGet(ctx context.Context, l *models.Log) (models.Log, e
 	}
 	id, _ := res.LastInsertId()
 
+	// libsql remote may not return LastInsertId. Fall back to a SELECT.
+	if id == 0 {
+		if err := db.conn.QueryRowContext(ctx,
+			`SELECT id FROM logs WHERE message = ? AND created_at = ? ORDER BY id DESC LIMIT 1`,
+			l.Message, now).Scan(&id); err != nil {
+			return models.Log{}, err
+		}
+	}
+
 	// Fetch the full log with category join
 	var full models.Log
-	var nuID sql.NullInt64
+	var nuID sql.NullString
 	err = db.stmtGetLog.QueryRowContext(ctx, id).Scan(
 		&full.ID, &nuID, &full.Message, &full.Level, &full.CategoryID,
 		&full.CategoryName, &full.CategoryColor,
@@ -505,7 +576,7 @@ func (db *DB) CreateLogAndGet(ctx context.Context, l *models.Log) (models.Log, e
 		return models.Log{}, err
 	}
 	if nuID.Valid {
-		full.UserID = nuID.Int64
+		full.UserID = nuID.String
 	}
 	return full, nil
 }
@@ -522,8 +593,12 @@ func (db *DB) UpdateLog(ctx context.Context, l *models.Log) error {
 		return err
 	}
 	n, _ := res.RowsAffected()
+	// libsql remote may return 0 rows affected even on success
 	if n == 0 {
-		return ErrNotFound
+		var exists bool
+		if err := db.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM logs WHERE id = ?)`, l.ID).Scan(&exists); err != nil || !exists {
+			return ErrNotFound
+		}
 	}
 	return nil
 }
@@ -547,7 +622,10 @@ func (db *DB) DeleteLog(ctx context.Context, id int64) (string, error) {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return "", ErrNotFound
+		var exists bool
+		if err := db.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM logs WHERE id = ?)`, id).Scan(&exists); err != nil || !exists {
+			return "", ErrNotFound
+		}
 	}
 	if path.Valid {
 		return path.String, nil
@@ -595,7 +673,7 @@ func (db *DB) TogglePinAndGet(ctx context.Context, id int64) (bool, models.Log, 
 
 	// Fetch the full log with category join
 	var full models.Log
-	var nuID sql.NullInt64
+	var nuID sql.NullString
 	err = db.stmtGetLog.QueryRowContext(ctx, id).Scan(
 		&full.ID, &nuID, &full.Message, &full.Level, &full.CategoryID,
 		&full.CategoryName, &full.CategoryColor,
@@ -606,7 +684,7 @@ func (db *DB) TogglePinAndGet(ctx context.Context, id int64) (bool, models.Log, 
 		return false, models.Log{}, err
 	}
 	if nuID.Valid {
-		full.UserID = nuID.Int64
+		full.UserID = nuID.String
 	}
 	return next == 1, full, nil
 }
@@ -623,13 +701,17 @@ func (db *DB) UpdateLogAndGet(ctx context.Context, l *models.Log) (models.Log, e
 		return models.Log{}, err
 	}
 	n, _ := res.RowsAffected()
+	// libsql remote may return 0 rows affected even on success
 	if n == 0 {
-		return models.Log{}, ErrNotFound
+		var exists bool
+		if err := db.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM logs WHERE id = ?)`, l.ID).Scan(&exists); err != nil || !exists {
+			return models.Log{}, ErrNotFound
+		}
 	}
 
 	// Fetch the full log with category join
 	var full models.Log
-	var nuID sql.NullInt64
+	var nuID sql.NullString
 	err = db.stmtGetLog.QueryRowContext(ctx, l.ID).Scan(
 		&full.ID, &nuID, &full.Message, &full.Level, &full.CategoryID,
 		&full.CategoryName, &full.CategoryColor,
@@ -640,7 +722,7 @@ func (db *DB) UpdateLogAndGet(ctx context.Context, l *models.Log) (models.Log, e
 		return models.Log{}, err
 	}
 	if nuID.Valid {
-		full.UserID = nuID.Int64
+		full.UserID = nuID.String
 	}
 	return full, nil
 }
@@ -648,7 +730,7 @@ func (db *DB) UpdateLogAndGet(ctx context.Context, l *models.Log) (models.Log, e
 // GetLog returns a full log with category fields.
 func (db *DB) GetLog(ctx context.Context, id int64) (models.Log, error) {
 	var l models.Log
-	var uID sql.NullInt64
+	var uID sql.NullString
 	err := db.stmtGetLog.QueryRowContext(ctx, id).Scan(
 		&l.ID, &uID, &l.Message, &l.Level, &l.CategoryID,
 		&l.CategoryName, &l.CategoryColor,
@@ -659,7 +741,7 @@ func (db *DB) GetLog(ctx context.Context, id int64) (models.Log, error) {
 		return l, ErrNotFound
 	}
 	if err == nil && uID.Valid {
-		l.UserID = uID.Int64
+		l.UserID = uID.String
 	}
 	return l, err
 }
@@ -696,7 +778,7 @@ func (db *DB) ListLogs(ctx context.Context, f models.Filter) ([]models.Log, int,
 	var out []models.Log
 	for rows.Next() {
 		var l models.Log
-		var uID sql.NullInt64
+		var uID sql.NullString
 		if err := rows.Scan(
 			&l.ID, &uID, &l.Message, &l.Level, &l.CategoryID,
 			&l.CategoryName, &l.CategoryColor,
@@ -706,7 +788,7 @@ func (db *DB) ListLogs(ctx context.Context, f models.Filter) ([]models.Log, int,
 			return nil, 0, err
 		}
 		if uID.Valid {
-			l.UserID = uID.Int64
+			l.UserID = uID.String
 		}
 		out = append(out, l)
 	}
@@ -716,7 +798,7 @@ func (db *DB) ListLogs(ctx context.Context, f models.Filter) ([]models.Log, int,
 func buildWhere(f models.Filter) (string, []interface{}) {
 	clauses := []string{}
 	args := []interface{}{}
-	if f.UserID > 0 {
+	if f.UserID != "" {
 		clauses = append(clauses, `l.user_id = ?`)
 		args = append(args, f.UserID)
 	}
@@ -844,14 +926,24 @@ func (db *DB) Stats(ctx context.Context, userID int64) (models.Stats, error) {
 
 // CreateUser creates a new user and returns the ID.
 func (db *DB) CreateUser(ctx context.Context, username, passwordHash string) (int64, error) {
-	res, err := db.stmtInsertUser.ExecContext(ctx, username, passwordHash, time.Now().UTC())
+	now := time.Now().UTC()
+	res, err := db.stmtInsertUser.ExecContext(ctx, username, passwordHash, now)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint") {
 			return 0, ErrDuplicate
 		}
 		return 0, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil || id == 0 {
+		var fallbackID int64
+		if err2 := db.conn.QueryRowContext(ctx,
+			`SELECT id FROM users WHERE username = ?`, username).Scan(&fallbackID); err2 != nil {
+			return 0, fmt.Errorf("create user: %w (fallback also failed: %v)", err, err2)
+		}
+		return fallbackID, nil
+	}
+	return id, nil
 }
 
 // GetUserByUsername retrieves a user by username.

@@ -13,29 +13,36 @@ import (
 	"time"
 
 	"log-server/internal/database"
+	"log-server/internal/supabase"
 )
 
 // Server wires together the HTTP routes and shared dependencies.
 type Server struct {
-	mux       *http.ServeMux
-	broker    *Broker
-	webFS     fs.FS
-	uploadDir string
-	maxUpload int64
-	db        *database.DB
-	dbTurso   *database.DB
-	sessions  *SessionManager
+	mux           *http.ServeMux
+	broker        *Broker
+	webFS         fs.FS
+	uploadDir     string
+	maxUpload     int64
+	db            database.Storer
+	dbTurso       database.Storer
+	dbSupabase    database.Storer
+	sb            *supabase.Client // direct ref for GoTrue auth calls
+	sessions      *SessionManager
+	supabaseURL   string // exposed via /api/config for auto-populating login form
+	supabaseKey   string // exposed via /api/config (anon key is public by design)
 }
 
 // Config holds tunables for the HTTP server.
 type Config struct {
-	UploadDir string
-	MaxUpload int64 // bytes
-	WebFS     fs.FS
+	UploadDir   string
+	MaxUpload   int64 // bytes
+	WebFS       fs.FS
+	SupabaseURL string // default Supabase URL, loaded from config.json
+	SupabaseKey string // default Supabase anon key, loaded from config.json
 }
 
 // NewServer constructs a Server with all routes registered.
-func NewServer(db *database.DB, dbTurso *database.DB, broker *Broker, cfg Config) *Server {
+func NewServer(db *database.DB, dbTurso *database.DB, dbSupabase *supabase.Client, broker *Broker, cfg Config) *Server {
 	if cfg.MaxUpload <= 0 {
 		cfg.MaxUpload = 1 << 30 // 1 GiB
 	}
@@ -44,20 +51,26 @@ func NewServer(db *database.DB, dbTurso *database.DB, broker *Broker, cfg Config
 	}
 
 	s := &Server{
-		mux:       http.NewServeMux(),
-		broker:    broker,
-		webFS:     cfg.WebFS,
-		uploadDir: cfg.UploadDir,
-		maxUpload: cfg.MaxUpload,
-		db:        db,
-		dbTurso:  dbTurso,
-		sessions:  NewSessionManager(),
+		mux:           http.NewServeMux(),
+		broker:        broker,
+		webFS:         cfg.WebFS,
+		uploadDir:     cfg.UploadDir,
+		maxUpload:     cfg.MaxUpload,
+		db:            db,
+		dbTurso:       dbTurso,
+		dbSupabase:    db,
+		sb:            dbSupabase,
+		sessions:      NewSessionManager(),
+		supabaseURL:   cfg.SupabaseURL,
+		supabaseKey:   cfg.SupabaseKey,
 	}
 
-	// When Turso DB is not available, use local DB for everything.
-	// The auth handler will still allow selection via session.
+	// Fallbacks
 	if s.dbTurso == nil {
 		s.dbTurso = db
+	}
+	if s.sb != nil {
+		s.dbSupabase = s.sb
 	}
 
 	if err := os.MkdirAll(cfg.UploadDir, 0o755); err != nil {
@@ -80,6 +93,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/login", s.handleLogin)
 	s.mux.HandleFunc("POST /api/logout", s.handleLogout)
 	s.mux.HandleFunc("GET /api/me", s.RequireAuth(s.handleMe))
+
+	// Supabase config (public - anon key is meant to be client-side)
+	s.mux.HandleFunc("GET /api/config", s.handleConfig)
 
 	// Login page (public)
 	s.mux.HandleFunc("GET /login", s.handleLoginPage)
@@ -136,6 +152,16 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	http.ServeFileFS(w, r, s.webFS, "templates/login.html")
 }
 
+// handleConfig exposes default Supabase config to the frontend for auto-populating the login form.
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	configured := s.supabaseURL != "" && s.supabaseKey != ""
+	writeJSON(w, http.StatusOK, map[string]any{
+		"configured":    configured,
+		"supabase_url":  s.supabaseURL,
+		"supabase_key":  s.supabaseKey,
+	})
+}
+
 // requireAuthHandler is like RequireAuth but accepts an http.Handler.
 func (s *Server) requireAuthHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +190,7 @@ func (s *Server) requireAuthHandler(next http.Handler) http.Handler {
 			}
 			return
 		}
-		r.Header.Set("X-User-ID", strconv.FormatInt(userID, 10))
+		r.Header.Set("X-User-ID", userID)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -243,7 +269,7 @@ func paramID(r *http.Request, key string) (int64, error) {
 }
 
 // getDB returns the appropriate database based on the session's DB type.
-func (s *Server) getDB(r *http.Request) *database.DB {
+func (s *Server) getDB(r *http.Request) database.Storer {
 	cookie, err := r.Cookie(sessionKey)
 	if err != nil {
 		return s.db
@@ -252,8 +278,19 @@ func (s *Server) getDB(r *http.Request) *database.DB {
 	if !ok {
 		return s.db
 	}
-	if session.DBType == "turso" {
+	switch session.DBType {
+	case "turso":
 		return s.dbTurso
+	case "supabase":
+		if s.sb != nil && session.JWT != "" {
+			// Clone the client with the request-specific JWT to avoid race conditions
+			return s.sb.Clone(session.JWT)
+		}
+		if s.sb != nil {
+			return s.sb.Clone("")
+		}
+		return s.db
+	default:
+		return s.db
 	}
-	return s.db
 }

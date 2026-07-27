@@ -5,11 +5,21 @@ log-server.exe
 # Database files
 logs.db
 *.db
+*.db-shm
+*.db-wal
 
 # Log and data files
 *.json
 !web/templates/
 !internal/
+!config.json
+supabase-schema.sql
+supabase-fix-pinned.sql
+supabase-fix-userid.sql
+supabase-fix-userid-with-policies.sql
+
+# Uploaded files (user content)
+uploads/
 
 # Cookie/test files
 cookies*.txt

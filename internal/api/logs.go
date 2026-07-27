@@ -25,6 +25,7 @@ type logCreateReq struct {
 
 func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
+	// For Supabase, userID will be 0, which is acceptable since Supabase manages users differently
 	var req logCreateReq
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -47,7 +48,7 @@ func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "category required")
 		return
 	}
-	if _, err := s.db.GetCategory(r.Context(), req.CategoryID); err != nil {
+	if _, err := s.getDB(r).GetCategory(r.Context(), req.CategoryID); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusBadRequest, "unknown category")
 			return
@@ -63,7 +64,7 @@ func (s *Server) handleCreateLog(w http.ResponseWriter, r *http.Request) {
 		CategoryID: req.CategoryID,
 		Pinned:     req.Pinned,
 	}
-	full, err := s.db.CreateLogAndGet(r.Context(), l)
+	full, err := s.getDB(r).CreateLogAndGet(r.Context(), l)
 	if err != nil {
 		slog.Error("create log", "err", err)
 		writeError(w, http.StatusInternalServerError, "create failed")
@@ -85,6 +86,16 @@ func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	
+	// Check if using Supabase
+	cookie, _ := r.Cookie(sessionKey)
+	isSupabase := false
+	if cookie != nil {
+		if sess, ok := s.sessions.GetSession(cookie.Value); ok {
+			isSupabase = (sess.DBType == "supabase")
+		}
+	}
+	
 	var req logCreateReq
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -103,7 +114,7 @@ func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "category required")
 		return
 	}
-	existing, err := s.db.GetLog(r.Context(), id)
+	existing, err := s.getDB(r).GetLog(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -112,16 +123,19 @@ func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	if existing.UserID != userID {
+	
+	// Only check ownership for local/turso, not for Supabase
+	if !isSupabase && existing.UserID != userID {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
+	
 	upd := existing
 	upd.Message = req.Message
 	upd.Level = req.Level
 	upd.CategoryID = req.CategoryID
 	// Preserve existing attachment unless explicitly cleared elsewhere.
-	full, err := s.db.UpdateLogAndGet(r.Context(), &upd)
+	full, err := s.getDB(r).UpdateLogAndGet(r.Context(), &upd)
 	if err != nil {
 		slog.Error("update log", "err", err)
 		writeError(w, http.StatusInternalServerError, "update failed")
@@ -138,7 +152,17 @@ func (s *Server) handleDeleteLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	existing, err := s.db.GetLog(r.Context(), id)
+	
+	// Check if using Supabase
+	cookie, _ := r.Cookie(sessionKey)
+	isSupabase := false
+	if cookie != nil {
+		if sess, ok := s.sessions.GetSession(cookie.Value); ok {
+			isSupabase = (sess.DBType == "supabase")
+		}
+	}
+	
+	existing, err := s.getDB(r).GetLog(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -147,12 +171,14 @@ func (s *Server) handleDeleteLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	if existing.UserID != userID {
+	
+	// Only check ownership for local/turso, not for Supabase
+	if !isSupabase && existing.UserID != userID {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
-	attachPath, err := s.db.DeleteLog(r.Context(), id)
+	attachPath, err := s.getDB(r).DeleteLog(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -176,7 +202,17 @@ func (s *Server) handleTogglePin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	existing, err := s.db.GetLog(r.Context(), id)
+	
+	// Check if using Supabase
+	cookie, _ := r.Cookie(sessionKey)
+	isSupabase := false
+	if cookie != nil {
+		if sess, ok := s.sessions.GetSession(cookie.Value); ok {
+			isSupabase = (sess.DBType == "supabase")
+		}
+	}
+	
+	existing, err := s.getDB(r).GetLog(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -185,12 +221,14 @@ func (s *Server) handleTogglePin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	if existing.UserID != userID {
+	
+	// Only check ownership for local/turso, not for Supabase
+	if !isSupabase && existing.UserID != userID {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
-	pinned, full, err := s.db.TogglePinAndGet(r.Context(), id)
+	pinned, full, err := s.getDB(r).TogglePinAndGet(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -210,7 +248,17 @@ func (s *Server) handleGetLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	l, err := s.db.GetLog(r.Context(), id)
+	
+	// Check if using Supabase
+	cookie, _ := r.Cookie(sessionKey)
+	isSupabase := false
+	if cookie != nil {
+		if sess, ok := s.sessions.GetSession(cookie.Value); ok {
+			isSupabase = (sess.DBType == "supabase")
+		}
+	}
+	
+	l, err := s.getDB(r).GetLog(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -219,20 +267,39 @@ func (s *Server) handleGetLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	if l.UserID != userID {
+	
+	// Only check ownership for local/turso, not for Supabase
+	if !isSupabase && l.UserID != userID {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
+	
 	writeJSON(w, http.StatusOK, l)
 }
 
 func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
+	
+	// For Supabase, don't filter by userID since all logs are shared
+	// Check if using Supabase by looking at session
+	cookie, _ := r.Cookie(sessionKey)
+	isSupabase := false
+	if cookie != nil {
+		if sess, ok := s.sessions.GetSession(cookie.Value); ok {
+			isSupabase = (sess.DBType == "supabase")
+		}
+	}
+	
 	f := models.Filter{
-		UserID: userID,
 		Search: strings.TrimSpace(r.URL.Query().Get("q")),
 		Level:  strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("level"))),
 	}
+	
+	// Only filter by userID for local/turso databases
+	if !isSupabase {
+		f.UserID = userID
+	}
+	
 	if cid := r.URL.Query().Get("category_id"); cid != "" {
 		if v, err := strconv.ParseInt(cid, 10, 64); err == nil {
 			f.CategoryID = v
@@ -251,12 +318,12 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add a timeout to prevent long-running queries from blocking
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	logs, total, err := s.db.ListLogs(ctx, f)
+	logs, total, err := s.getDB(r).ListLogs(ctx, f)
 	if err != nil {
-		slog.Warn("list logs", "err", err)
+		slog.Warn("list logs", "err", err, "filter", f)
 		writeError(w, http.StatusInternalServerError, "list failed")
 		return
 	}

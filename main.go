@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 
 	"log-server/internal/api"
 	"log-server/internal/database"
+	"log-server/internal/supabase"
 )
 
 //go:embed all:web
@@ -52,6 +54,8 @@ var quitChan = make(chan os.Signal, 1)
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	turso := flag.Bool("turso", false, "Use Turso remote database instead of local SQLite")
+	supabaseURL := flag.String("supabase-url", "", "Supabase project URL (https://<project>.supabase.co)")
+	supabaseKey := flag.String("supabase-key", "", "Supabase anonymous key for REST API")
 	dbPath := flag.String("db", "logs.db", "SQLite database file path (or Turso URL like libsql://...)")
 	dbToken := flag.String("db-token", "", "Turso authentication token (for remote databases)")
 	uploadDir := flag.String("uploads", "uploads", "Directory for uploaded files")
@@ -70,6 +74,25 @@ func main() {
 		}
 	}
 
+	// If no Supabase flags provided, try loading from config.json
+	if *supabaseURL == "" || *supabaseKey == "" {
+		cfgFile, err := os.ReadFile("config.json")
+		if err == nil {
+			var fileCfg struct {
+				SupabaseURL string `json:"supabase_url"`
+				SupabaseKey string `json:"supabase_key"`
+			}
+			if err := json.Unmarshal(cfgFile, &fileCfg); err == nil {
+				if *supabaseURL == "" && fileCfg.SupabaseURL != "" {
+					*supabaseURL = fileCfg.SupabaseURL
+				}
+				if *supabaseKey == "" && fileCfg.SupabaseKey != "" {
+					*supabaseKey = fileCfg.SupabaseKey
+				}
+			}
+		}
+	}
+
 	// Determine log level based on --debug flag
 	level := slog.LevelInfo
 	if *debug {
@@ -85,7 +108,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	// Print startup banner
-	printBanner(*addr, *dbPath)
+	printBanner(*addr, *dbPath, *supabaseURL)
 
 	// Build DSN for Turso or local SQLite
 	dsn := buildDSN(*dbPath, *dbToken)
@@ -116,16 +139,31 @@ func main() {
 	defer broker.Stop()
 	printSuccess("Real-time: Enabled (SSE)")
 
+	// Supabase client (optional)
+	var supabaseClient *supabase.Client
+	if *supabaseURL != "" {
+		sc, err := supabase.New(*supabaseURL, *supabaseKey)
+		if err != nil {
+			printError("Supabase setup failed: %v", err)
+		} else {
+			supabaseClient = sc
+			printSuccess("Supabase: Connected (%s)", *supabaseURL)
+			printInfo("Supabase: Signup/login via GoTrue, data via PostgREST")
+		}
+	}
+
 	web, err := fs.Sub(webFS, "web")
 	if err != nil {
 		printError("Embedded web fs: %v", err)
 		os.Exit(1)
 	}
 
-	srv := api.NewServer(db, dbTurso, broker, api.Config{
-		UploadDir: *uploadDir,
-		MaxUpload: *maxUpload,
-		WebFS:     web,
+	srv := api.NewServer(db, dbTurso, supabaseClient, broker, api.Config{
+		UploadDir:   *uploadDir,
+		MaxUpload:   *maxUpload,
+		WebFS:       web,
+		SupabaseURL: *supabaseURL,
+		SupabaseKey: *supabaseKey,
 	})
 
 	httpSrv := &http.Server{
@@ -323,7 +361,7 @@ func (h *coloredHandler) WithGroup(name string) slog.Handler {
 
 // ============ Banner Functions ============
 
-func printBanner(addr, dbPath string) {
+func printBanner(addr, dbPath, supabaseURL string) {
 	isColor := isTerminalColorSupported()
 
 	sep := "═══════════════════════════════════════════════════════════"
@@ -346,6 +384,9 @@ func printBanner(addr, dbPath string) {
 	fmt.Println()
 	fmt.Printf("%sAddress:%s %s\n", colorCyan, colorReset, addr)
 	fmt.Printf("%sDatabase:%s %s\n", colorCyan, colorReset, dbPath)
+	if supabaseURL != "" {
+		fmt.Printf("%sSupabase:%s %s\n", colorCyan, colorReset, supabaseURL)
+	}
 	fmt.Println()
 }
 

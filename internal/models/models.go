@@ -44,7 +44,7 @@ type User struct {
 // Log represents a single log entry.
 type Log struct {
 	ID             int64     `json:"id"`
-	UserID         int64     `json:"user_id,omitempty"`
+	UserID         string    `json:"user_id,omitempty"`
 	Message        string    `json:"message"`
 	Level          string    `json:"level"`
 	CategoryID     int64     `json:"category_id"`
@@ -69,7 +69,7 @@ type Attachment struct {
 
 // Filter describes search + filter parameters for listing logs.
 type Filter struct {
-	UserID     int64
+	UserID     string
 	Search     string
 	Level      string
 	CategoryID int64 // 0 = any

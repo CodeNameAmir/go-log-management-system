@@ -53,6 +53,37 @@
     @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
     .toast.error { background: #ef4444; }
     .toast.success { background: #22c55e; }
+
+    .db-toggle {
+      display: flex; gap: 8px; margin-bottom: 16px;
+    }
+    .db-option {
+      flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg-3); color: var(--muted); text-align: center;
+      cursor: pointer; transition: all 0.2s; font-size: 14px;
+    }
+    .db-option.active {
+      border-color: var(--accent); color: var(--text); background: #1d2d44;
+    }
+    .db-tag {
+      display: inline-block; margin-top: 4px; font-size: 11px; padding: 2px 6px;
+      border-radius: 3px; background: #22c55e22; color: #22c55e;
+    }
+    .db-icon {
+      display: block; font-size: 18px; margin-bottom: 4px;
+    }
+    .turso-config, .supabase-config {
+      display: none; margin-bottom: 16px; padding: 12px; background: var(--bg-3);
+      border-radius: 6px; border: 1px solid var(--border);
+    }
+    .turso-config.visible, .supabase-config.visible { display: block; }
+    .turso-config label, .supabase-config label { font-size: 12px; color: var(--muted); }
+    .turso-config input, .supabase-config input {
+      width: 100%; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); font-size: 13px; margin-top: 4px;
+      box-sizing: border-box;
+    }
+    .turso-config .hint, .supabase-config .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -63,6 +94,36 @@
       <p>Please enter your details to sign in</p>
     </div>
     <form id="loginForm">
+      <div class="form-group">
+        <label>Database</label>
+        <div class="db-toggle">
+          <div class="db-option active" data-db="local" id="dbLocal">
+            <span class="db-icon">📁</span> Local
+          </div>
+          <div class="db-option" data-db="turso" id="dbTurso">
+            <span class="db-icon">☁️</span> Turso
+          </div>
+          <div class="db-option" data-db="supabase" id="dbSupabase">
+            <span class="db-icon">⚡</span> Supabase
+          </div>
+        </div>
+      </div>
+      <div class="turso-config" id="loginTursoConfig">
+        <label>Turso URL</label>
+        <input type="text" id="loginTursoUrl" value="libsql://test-codenameamir.aws-ap-northeast-1.turso.io" placeholder="libsql://your-db.turso.io">
+        <div class="hint">Default: libsql://test-codenameamir.aws-ap-northeast-1.turso.io</div>
+        <label style="margin-top:8px;">Auth Token</label>
+        <input type="password" id="loginTursoToken" placeholder="Your Turso auth token">
+        <div class="hint">Leave empty to use default token</div>
+      </div>
+      <div class="supabase-config" id="loginSupabaseConfig">
+        <label>Supabase Project URL</label>
+        <input type="text" id="loginSupabaseUrl" placeholder="https://yourproject.supabase.co">
+        <div class="hint">From Settings → API → Project URL</div>
+        <label style="margin-top:8px;">Anon/Public Key</label>
+        <input type="password" id="loginSupabaseKey" placeholder="eyJhbGci...">
+        <div class="hint">From Settings → API → anon public (not publishable)</div>
+      </div>
       <div class="form-group">
         <label>Username</label>
         <input type="text" id="loginUser" required autocomplete="username">
@@ -84,6 +145,36 @@
       <p>Join us to start managing your logs</p>
     </div>
     <form id="signupForm">
+      <div class="form-group">
+        <label>Database</label>
+        <div class="db-toggle">
+          <div class="db-option active" data-db="local" id="signupDbLocal">
+            <span class="db-icon">📁</span> Local
+          </div>
+          <div class="db-option" data-db="turso" id="signupDbTurso">
+            <span class="db-icon">☁️</span> Turso
+          </div>
+          <div class="db-option" data-db="supabase" id="signupDbSupabase">
+            <span class="db-icon">⚡</span> Supabase
+          </div>
+        </div>
+      </div>
+      <div class="turso-config" id="signupTursoConfig">
+        <label>Turso URL</label>
+        <input type="text" id="signupTursoUrl" value="libsql://test-codenameamir.aws-ap-northeast-1.turso.io" placeholder="libsql://your-db.turso.io">
+        <div class="hint">Default: libsql://test-codenameamir.aws-ap-northeast-1.turso.io</div>
+        <label style="margin-top:8px;">Auth Token</label>
+        <input type="password" id="signupTursoToken" placeholder="Your Turso auth token">
+        <div class="hint">Leave empty to use default token</div>
+      </div>
+      <div class="supabase-config" id="signupSupabaseConfig">
+        <label>Supabase Project URL</label>
+        <input type="text" id="signupSupabaseUrl" placeholder="https://yourproject.supabase.co">
+        <div class="hint">From Settings → API → Project URL</div>
+        <label style="margin-top:8px;">Anon/Public Key</label>
+        <input type="password" id="signupSupabaseKey" placeholder="eyJhbGci...">
+        <div class="hint">From Settings → API → anon public (not publishable)</div>
+      </div>
       <div class="form-group">
         <label>Username</label>
         <input type="text" id="signupUser" required autocomplete="username">
@@ -114,6 +205,124 @@
       }
     }
 
+    // Default Turso values
+    const DEFAULT_TURSO_URL = 'libsql://test-codenameamir.aws-ap-northeast-1.turso.io';
+    const DEFAULT_TURSO_TOKEN = '';
+
+    // Load saved Turso settings from localStorage (or use defaults)
+    function loadTursoSettings() {
+      let saved;
+      try {
+        saved = JSON.parse(localStorage.getItem('turso_settings') || '{}');
+      } catch (e) {
+        saved = {};
+      }
+      const url = saved.url || DEFAULT_TURSO_URL;
+      const token = saved.token || DEFAULT_TURSO_TOKEN;
+      document.getElementById('loginTursoUrl').value = url;
+      document.getElementById('loginTursoToken').value = token;
+      document.getElementById('signupTursoUrl').value = url;
+      document.getElementById('signupTursoToken').value = token;
+    }
+
+    // Save Turso settings to localStorage
+    function saveTursoSettings(url, token) {
+      localStorage.setItem('turso_settings', JSON.stringify({
+        url: url || DEFAULT_TURSO_URL,
+        token: token || ''
+      }));
+    }
+
+    // Load saved Supabase settings from localStorage (or use defaults from server config)
+    async function loadSupabaseSettings() {
+      // First check localStorage
+      let saved;
+      try {
+        saved = JSON.parse(localStorage.getItem('supabase_settings') || '{}');
+      } catch (e) {
+        saved = {};
+      }
+
+      // If not in localStorage, fetch from server config
+      if (!saved.url || !saved.key) {
+        try {
+          const res = await fetch('/api/config');
+          const cfg = await res.json();
+          if (cfg.configured) {
+            saved.url = saved.url || cfg.supabase_url;
+            saved.key = saved.key || cfg.supabase_key;
+            // Save server defaults to localStorage
+            localStorage.setItem('supabase_settings', JSON.stringify(saved));
+          }
+        } catch (e) {
+          // Ignore - user will need to type manually
+        }
+      }
+
+      const url = saved.url || '';
+      const key = saved.key || '';
+      document.getElementById('loginSupabaseUrl').value = url;
+      document.getElementById('loginSupabaseKey').value = key;
+      document.getElementById('signupSupabaseUrl').value = url;
+      document.getElementById('signupSupabaseKey').value = key;
+    }
+
+    // Save Supabase settings to localStorage
+    function saveSupabaseSettings(url, key) {
+      localStorage.setItem('supabase_settings', JSON.stringify({
+        url: url || '',
+        key: key || ''
+      }));
+    }
+
+    loadTursoSettings();
+    loadSupabaseSettings();
+
+    // DB toggle logic
+    document.querySelectorAll('.db-toggle').forEach(toggle => {
+      const form = toggle.closest('form');
+      const tursoConfigId = form.id === 'loginForm' ? 'loginTursoConfig' : 'signupTursoConfig';
+      const supabaseConfigId = form.id === 'loginForm' ? 'loginSupabaseConfig' : 'signupSupabaseConfig';
+      const tursoConfigEl = document.getElementById(tursoConfigId);
+      const supabaseConfigEl = document.getElementById(supabaseConfigId);
+      const options = toggle.querySelectorAll('.db-option');
+      options.forEach(opt => {
+        opt.onclick = () => {
+          options.forEach(o => o.classList.remove('active'));
+          opt.classList.add('active');
+          const dbType = opt.dataset.db;
+          if (tursoConfigEl) {
+            tursoConfigEl.classList.toggle('visible', dbType === 'turso');
+          }
+          if (supabaseConfigEl) {
+            supabaseConfigEl.classList.toggle('visible', dbType === 'supabase');
+          }
+        };
+      });
+    });
+
+    function getDBType(formId) {
+      const form = document.getElementById(formId);
+      const active = form.querySelector('.db-toggle .db-option.active');
+      return active ? active.dataset.db : 'local';
+    }
+
+    function getTursoUrl(formId) {
+      return document.getElementById(formId === 'loginForm' ? 'loginTursoUrl' : 'signupTursoUrl').value;
+    }
+
+    function getTursoToken(formId) {
+      return document.getElementById(formId === 'loginForm' ? 'loginTursoToken' : 'signupTursoToken').value;
+    }
+
+    function getSupabaseUrl(formId) {
+      return document.getElementById(formId === 'loginForm' ? 'loginSupabaseUrl' : 'signupSupabaseUrl').value;
+    }
+
+    function getSupabaseKey(formId) {
+      return document.getElementById(formId === 'loginForm' ? 'loginSupabaseKey' : 'signupSupabaseKey').value;
+    }
+
     function showToast(msg, type = 'error') {
       const t = document.getElementById('toast');
       t.textContent = msg;
@@ -135,11 +344,27 @@
 
     document.getElementById('loginForm').onsubmit = async (e) => {
       e.preventDefault();
+      const dbType = getDBType('loginForm');
+      const body = {
+        username: document.getElementById('loginUser').value,
+        password: document.getElementById('loginPass').value,
+        db_type: dbType
+      };
+      if (dbType === 'turso') {
+        const tursoUrl = getTursoUrl('loginForm');
+        const tursoToken = getTursoToken('loginForm');
+        body.turso_url = tursoUrl;
+        body.turso_token = tursoToken;
+        saveTursoSettings(tursoUrl, tursoToken);
+      } else if (dbType === 'supabase') {
+        const supabaseUrl = getSupabaseUrl('loginForm');
+        const supabaseKey = getSupabaseKey('loginForm');
+        body.supabase_url = supabaseUrl;
+        body.supabase_key = supabaseKey;
+        saveSupabaseSettings(supabaseUrl, supabaseKey);
+      }
       try {
-        await api('/api/login', {
-          username: document.getElementById('loginUser').value,
-          password: document.getElementById('loginPass').value
-        });
+        await api('/api/login', body);
         window.location.href = '/';
       } catch (err) {
         showToast(err.message);
@@ -148,11 +373,27 @@
 
     document.getElementById('signupForm').onsubmit = async (e) => {
       e.preventDefault();
+      const dbType = getDBType('signupForm');
+      const body = {
+        username: document.getElementById('signupUser').value,
+        password: document.getElementById('signupPass').value,
+        db_type: dbType
+      };
+      if (dbType === 'turso') {
+        const tursoUrl = getTursoUrl('signupForm');
+        const tursoToken = getTursoToken('signupForm');
+        body.turso_url = tursoUrl;
+        body.turso_token = tursoToken;
+        saveTursoSettings(tursoUrl, tursoToken);
+      } else if (dbType === 'supabase') {
+        const supabaseUrl = getSupabaseUrl('signupForm');
+        const supabaseKey = getSupabaseKey('signupForm');
+        body.supabase_url = supabaseUrl;
+        body.supabase_key = supabaseKey;
+        saveSupabaseSettings(supabaseUrl, supabaseKey);
+      }
       try {
-        await api('/api/signup', {
-          username: document.getElementById('signupUser').value,
-          password: document.getElementById('signupPass').value
-        });
+        await api('/api/signup', body);
         showToast('Account created! Please sign in.', 'success');
         toggleAuth();
       } catch (err) {

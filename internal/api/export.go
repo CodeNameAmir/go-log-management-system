@@ -20,7 +20,12 @@ import (
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
-	st, err := s.db.Stats(r.Context(), userID)
+	// Parse string userID to int64 for local/turso; for supabase use 0
+	var userIDInt int64
+	if userID != "" {
+		userIDInt, _ = strconv.ParseInt(userID, 10, 64)
+	}
+	st, err := s.getDB(r).Stats(r.Context(), userIDInt)
 	if err != nil {
 		slog.Error("stats", "err", err)
 		writeError(w, http.StatusInternalServerError, "stats failed")
@@ -55,7 +60,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logs, _, err := s.db.ListLogs(r.Context(), f)
+	logs, _, err := s.getDB(r).ListLogs(r.Context(), f)
 	if err != nil {
 		slog.Error("export list", "err", err)
 		writeError(w, http.StatusInternalServerError, "export failed")
@@ -164,7 +169,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		parsed = []models.Log{}
 	}
 
-	cats, err := s.db.ListCategories(r.Context())
+	cats, err := s.getDB(r).ListCategories(r.Context())
 	if err != nil {
 		slog.Error("import list categories", "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to load categories")
@@ -175,7 +180,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		catByName[strings.ToLower(strings.TrimSpace(c.Name))] = c
 	}
 
-	existing, _, err := s.db.ListLogs(r.Context(), models.Filter{Limit: 50000})
+	existing, _, err := s.getDB(r).ListLogs(r.Context(), models.Filter{Limit: 50000})
 	if err != nil {
 		slog.Error("import list existing logs", "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to load existing logs")
@@ -218,7 +223,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if _, err := s.db.CreateLog(r.Context(), &models.Log{
+		if _, err := s.getDB(r).CreateLog(r.Context(), &models.Log{
 			Message:    row.Message,
 			Level:      row.Level,
 			CategoryID: catID,
@@ -423,7 +428,7 @@ func parseBool(s string) bool {
 
 func (s *Server) resolveImportCategory(r *http.Request, cache map[string]models.Category, categoryID int64, categoryName, categoryColor string) (int64, error) {
 	if categoryID > 0 {
-		if _, err := s.db.GetCategory(r.Context(), categoryID); err == nil {
+		if _, err := s.getDB(r).GetCategory(r.Context(), categoryID); err == nil {
 			return categoryID, nil
 		}
 	}
@@ -436,10 +441,10 @@ func (s *Server) resolveImportCategory(r *http.Request, cache map[string]models.
 		if categoryColor == "" {
 			categoryColor = "#64748b"
 		}
-		newID, err := s.db.CreateCategory(r.Context(), name, categoryColor)
+		newID, err := s.getDB(r).CreateCategory(r.Context(), name, categoryColor)
 		if err != nil {
 			if errors.Is(err, database.ErrDuplicate) {
-				cats, listErr := s.db.ListCategories(r.Context())
+				cats, listErr := s.getDB(r).ListCategories(r.Context())
 				if listErr != nil {
 					return 0, listErr
 				}
