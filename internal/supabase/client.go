@@ -434,9 +434,20 @@ func (c *Client) ClearAttachment(ctx context.Context, logID int64) (string, erro
 }
 
 func (c *Client) Stats(ctx context.Context, userID int64) (models.Stats, error) {
+	return c.StatsWithFilter(ctx, userID, nil)
+}
+
+func (c *Client) StatsWithFilter(ctx context.Context, userID int64, since *time.Time) (models.Stats, error) {
 	s := models.Stats{}
+	
+	// Build query with optional since filter
+	query := fmt.Sprintf("select=count&user_id=%d", userID)
+	if since != nil {
+		query += fmt.Sprintf("&created_at=gte.%s", since.Format(time.RFC3339))
+	}
+	
 	// total logs
-	reqURL := fmt.Sprintf("%s?select=count&user_id=%d", c.restURL("logs"), userID)
+	reqURL := fmt.Sprintf("%s?%s", c.restURL("logs"), query)
 	req, _ := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	req.Header.Set("apikey", c.anonKey)
 	if c.jwt != "" {
@@ -452,6 +463,7 @@ func (c *Client) Stats(ctx context.Context, userID int64) (models.Stats, error) 
 		}
 		resp.Body.Close()
 	}
+	
 	// categories
 	catReq, _ := http.NewRequestWithContext(ctx, "GET", c.restURL("categories?select=count"), nil)
 	catReq.Header.Set("apikey", c.anonKey)

@@ -42,16 +42,48 @@ textarea{resize:vertical; min-height:90px; font-family: ui-monospace, Menlo, Con
 /* Layout */
 header.top{
   position:sticky; top:0; z-index:20;
-  display:flex; align-items:center; gap:12px; padding:12px 20px;
-  background:rgba(13,13,13,.95); backdrop-filter:blur(8px);
-  border-bottom:1px solid var(--border); flex-wrap:wrap;
+  display:flex;
+  align-items:center; 
+  gap:20px; 
+  padding:16px 24px;
+  background:linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+  border-bottom:2px solid #333;
+  box-shadow:0 2px 10px rgba(0,0,0,.3);
 }
-.brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:16px; color:#fff}
-.brand .dot{width:10px; height:10px; border-radius:50%; background:#444}
-.toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-left:auto}
+.brand{
+  display:flex; 
+  align-items:center; 
+  gap:12px; 
+  font-weight:700; 
+  font-size:18px; 
+  color:#fff;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.toolbar{
+  display:flex; 
+  gap:10px; 
+  flex-wrap:wrap;
+  margin-left:auto;
+}
+.toolbar .btn,
+.toolbar .dropdown .btn,
+.toolbar .user-dropdown-btn{
+  min-width:90px;
+  justify-content:center;
+}
 .conn{
-  display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);
-  padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:var(--bg-2);
+  display:inline-flex; 
+  align-items:center; 
+  gap:8px; 
+  font-size:12px; 
+  color:var(--muted);
+  padding:6px 12px; 
+  border:1px solid var(--border); 
+  border-radius:20px; 
+  background:rgba(20,20,20,.6);
+  backdrop-filter:blur(8px);
+  white-space:nowrap;
 }
 .conn .led{width:8px; height:8px; border-radius:50%; background:#444}
 .conn.ok .led{background:var(--green); box-shadow:0 0 6px var(--green)}
@@ -63,13 +95,25 @@ main{padding:20px; max-width:1400px; margin:0 auto}
 
 /* Filters */
 .filters{
-  display:grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap:10px;
+  display:grid; grid-template-columns: 1.2fr 1fr 1fr 1fr auto; gap:10px;
   background:var(--bg-2); border:1px solid var(--border);
   border-radius:var(--radius); padding:12px; margin-bottom:16px;
 }
 .filters .search{position:relative}
 .filters .search input{width:100%; padding-left:36px}
 .filters .search svg{position:absolute; left:10px; top:9px; opacity:.55}
+.filter-checkboxes{
+  display:flex; align-items:center; gap:8px;
+  background:var(--bg-3); border:1px solid var(--border); border-radius:6px;
+  padding:6px 10px;
+}
+.filter-checkbox{
+  display:flex; align-items:center; gap:4px;
+  font-size:12px; cursor:pointer; user-select:none; white-space:nowrap;
+}
+.filter-checkbox input[type="checkbox"]{
+  width:14px; height:14px; cursor:pointer; margin:0;
+}
 
 /* Tabs */
 .tabs{display:flex; gap:4px; margin-bottom:14px; border-bottom:1px solid var(--border)}
@@ -87,7 +131,7 @@ main{padding:20px; max-width:1400px; margin:0 auto}
 .table-wrap{overflow-x:auto}
 table{width:100%; border-collapse:collapse; min-width:900px}
 th,td{padding:11px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle}
-th{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); background:var(--bg-3); font-weight:600}
+th{font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#ffffff; background:#2d2d2d; font-weight:700; border-bottom:3px solid #555; padding:14px 12px}
 tr.pinned{background:linear-gradient(90deg, rgba(234,179,8,.08), transparent 50%)}
 tr.pinned td:first-child{box-shadow:inset 3px 0 0 var(--yellow)}
 tr:hover td{background:rgba(255,255,255,.02)}
@@ -100,18 +144,48 @@ tr.new-row{animation:flash .8s ease}
 
 .badge{
   display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px;
-  font-weight:600; letter-spacing:.04em; border:1px solid transparent;
+  font-weight:600; letter-spacing:.04em; border:1px solid transparent; cursor:pointer;
+  transition:all .15s;
 }
-.level-DEBUG    {background:#1a1a1a; color:#888; border-color:#333}
-.level-INFO     {background:#1a1a1a; color:#aaa; border-color:#333}
+.badge:hover{opacity:.8; transform:scale(1.05)}
+.level-DEBUG    {background:#1e293b; color:#94a3b8; border-color:#334155}
+.level-INFO     {background:#065f46; color:#6ee7b7; border-color:#047857}
 .level-WARNING  {background:rgba(234,179,8,.12);  color:#fde68a; border-color:#713f12}
 .level-ERROR    {background:rgba(239,68,68,.14);   color:#fca5a5; border-color:#7f1d1d}
 .level-CRITICAL {background:rgba(168,85,247,.14);  color:#d8b4fe; border-color:#6b21a8; animation:pulse 2s infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 3px rgba(168,85,247,.2)}}
 
 .cat-dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle}
+.cat-cell{cursor:pointer; transition:color .15s}
+.cat-cell:hover{color:#ccc}
 
-.actions{display:flex; gap:4px}
+.actions{position:relative}
+.actions-menu-btn{
+  width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center;
+  background:transparent; border:1px solid transparent; border-radius:6px; color:var(--muted);
+  cursor:pointer; font-size:16px; font-weight:bold;
+}
+.actions-menu-btn:hover{background:var(--bg-3); color:var(--text); border-color:var(--border)}
+.actions-menu{
+  position:absolute; right:0; top:100%; margin-top:4px; z-index:100;
+  background:var(--bg-2); border:1px solid var(--border); border-radius:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.4); min-width:140px; display:none;
+  max-height:80vh; overflow-y:auto;
+}
+.actions-menu.open-up{
+  top:auto; bottom:100%; margin-top:0; margin-bottom:4px;
+}
+.actions-menu.show{display:block}
+.actions-menu-item{
+  display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer;
+  border:none; background:transparent; color:var(--text); width:100%; text-align:left;
+  font-size:13px; transition:background .15s;
+}
+.actions-menu-item:first-child{border-radius:8px 8px 0 0}
+.actions-menu-item:last-child{border-radius:0 0 8px 8px}
+.actions-menu-item:hover{background:var(--bg-3)}
+.actions-menu-item.danger{color:#fca5a5}
+.actions-menu-item.danger:hover{background:#7f1d1d}
 .icon-btn{
   width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center;
   background:transparent; border:1px solid transparent; border-radius:6px; color:var(--muted);
@@ -199,16 +273,97 @@ tr.new-row{animation:flash .8s ease}
 .import-result .warn{color:var(--yellow)}
 .import-result .err{color:var(--red)}
 
+/* Pagination */
+.pagination{
+  display:flex; align-items:center; justify-content:space-between; padding:14px 16px;
+  border-top:1px solid var(--border); background:var(--bg-2);
+}
+.pagination-info{font-size:13px; color:var(--muted)}
+.pagination-info strong{color:var(--text); font-weight:600}
+
+/* Mobile card layout */
+.log-cards{display:none}
+.log-card{
+  background:var(--bg-2); border:1px solid var(--border); border-radius:8px;
+  padding:14px; margin-bottom:12px;
+  border-left:3px solid var(--border);
+}
+.log-card.pinned{
+  border-left-color:var(--yellow);
+  background:linear-gradient(90deg, rgba(234,179,8,.08), var(--bg-2) 50%);
+}
+.log-card-header{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px; gap:10px;
+}
+.log-card-meta{
+  display:flex; align-items:center; gap:12px; font-size:12px; color:var(--muted);
+  flex-wrap:wrap;
+}
+.log-card-meta .badge{margin-right:2px}
+.log-card-message{
+  font-size:14px; line-height:1.5; margin-bottom:10px; cursor:pointer;
+  word-break:break-word;
+  background:var(--bg-3); padding:10px 12px; border-radius:6px;
+  border-left:2px solid var(--border);
+}
+.log-card-message:hover{color:#ccc}
+.log-card-footer{
+  display:flex; align-items:center; justify-content:space-between;
+  padding-top:10px; border-top:1px solid var(--border);
+}
+
 @media (max-width: 780px){
-  .filters{grid-template-columns:1fr 1fr}
+  .filters{
+    grid-template-columns:1fr 1fr;
+  }
   .filters .search{grid-column:1/-1}
+  .filter-checkboxes{
+    grid-column:1/-1;
+    justify-content:space-between;
+  }
   main{padding:14px}
   .stat-card .value{font-size:22px}
+  /* Show cards, hide table */
+  table{display:none}
+  .log-cards{display:block}
 }
 @media (max-width: 520px){
-  header.top{padding:10px 12px}
-  .toolbar{width:100%}
-  .filters{grid-template-columns:1fr}
+  header.top{
+    padding:10px 12px;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .brand{
+    font-size:16px;
+    gap:8px;
+  }
+  .conn{
+    font-size:11px;
+    padding:4px 10px;
+    margin-left:auto;
+  }
+  .toolbar{
+    width:100%;
+    gap:8px;
+  }
+  .toolbar .btn,
+  .toolbar .dropdown .btn,
+  .toolbar .user-dropdown-btn{
+    padding:6px 10px;
+    font-size:12px;
+    flex:1;
+    justify-content:center;
+  }
+  .filters{
+    grid-template-columns:1fr 1fr;
+  }
+  .filters .search{grid-column:1/-1}
+  .filter-checkboxes{
+    grid-column:1/-1;
+    flex-wrap:wrap;
+    gap:6px;
+  }
   .row2{grid-template-columns:1fr}
 }
 
@@ -225,6 +380,7 @@ tr.new-row{animation:flash .8s ease}
   min-width:180px; background:var(--bg-3); border:1px solid var(--border);
   border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,.5);
   display:none; flex-direction:column; padding:6px;
+  margin-top:8px;
 }
 .dropdown-menu.show{display:flex}
 .dropdown-menu button{
@@ -234,17 +390,25 @@ tr.new-row{animation:flash .8s ease}
   border-radius:6px; font-size:13px;
 }
 .dropdown-menu button:hover{background:#2a2a2a}
+.dropdown-menu button.danger{color:#fca5a5}
+.dropdown-menu button.danger:hover{background:#7f1d1d}
 .dropdown-menu hr{
   border:none; border-top:1px solid var(--border);
   margin:6px 0;
 }
+.user-dropdown-btn{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 14px; background:var(--bg-3); border:1px solid var(--border);
+  border-radius:6px; cursor:pointer; transition:all .15s;
+  color:var(--text); font-size:14px; font-weight:500;
+}
+.user-dropdown-btn:hover{background:#2a2a2a; border-color:#444}
 </style>
 </head>
 <body>
 
 <header class="top">
   <div class="brand">
-    <span class="dot"></span>
     <span>Log Server</span>
   </div>
   <span id="connStatus" class="conn">
@@ -252,23 +416,30 @@ tr.new-row{animation:flash .8s ease}
     <span class="txt">connecting…</span>
   </span>
   <div class="toolbar">
-    <div id="userSection" style="display: flex; align-items: center; gap: 10px; margin-right: 10px;">
-      <span id="userName" style="font-size: 13px; color: var(--muted);"></span>
-      <button class="btn btn-sm btn-danger" id="btnLogout" style="padding: 4px 8px; font-size: 11px;">Logout</button>
-    </div>
     <button class="btn btn-primary" id="btnAddLog">+ Add Log</button>
     <button class="btn" id="btnAddCategory">+ Category</button>
     <div class="dropdown">
       <button class="btn" id="btnData">Data ▼</button>
       <div class="dropdown-menu" id="dataMenu">
-        <button id="menuImportCSV">⬆ Import CSV</button>
-        <button id="menuImportJSON">⬆ Import JSON</button>
+        <button id="menuImportCSV">Import CSV</button>
+        <button id="menuImportJSON">Import JSON</button>
         <hr>
-        <button id="menuExportCSV">⬇ Export CSV</button>
-        <button id="menuExportJSON">⬇ Export JSON</button>
+        <button id="menuExportCSV">Export CSV</button>
+        <button id="menuExportJSON">Export JSON</button>
       </div>
     </div>
-    <button class="btn" id="btnNotify" title="Enable browser notifications">🔔 Notify</button>
+    <div class="dropdown">
+      <button class="user-dropdown-btn" id="btnUserMenu">
+        <span id="userName"></span>
+        <span>▼</span>
+      </button>
+      <div class="dropdown-menu" id="userMenu">
+        <button id="menuChangePassword">Change Password</button>
+        <button id="menuTheme">Toggle Theme</button>
+        <hr>
+        <button id="menuLogout" class="danger">Logout</button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -290,7 +461,20 @@ tr.new-row{animation:flash .8s ease}
         <option>DEBUG</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option>
       </select>
       <select id="filterCategory"><option value="">All categories</option></select>
-      <button class="btn btn-sm" id="btnClearFilters">Clear</button>
+      <div style="position:relative">
+        <input type="date" id="filterDateFrom" placeholder="From date" style="width:100%">
+      </div>
+      <div class="filter-checkboxes">
+        <label class="filter-checkbox">
+          <input type="checkbox" id="filterPinned">
+          <span>Pinned</span>
+        </label>
+        <label class="filter-checkbox">
+          <input type="checkbox" id="filterHasFile">
+          <span>File</span>
+        </label>
+        <button class="btn btn-sm" id="btnClearFilters" style="padding:4px 8px; font-size:11px">Clear</button>
+      </div>
     </div>
 
     <div class="panel">
@@ -308,9 +492,25 @@ tr.new-row{animation:flash .8s ease}
           <tbody id="logBody"></tbody>
         </table>
       </div>
+      <div class="log-cards" id="logCards"></div>
       <div id="logEmpty" class="empty hidden">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6M9 16h6M9 8h6"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
         <div>No logs yet. Click <b>+ Add Log</b> to create one.</div>
+      </div>
+      <div class="pagination">
+        <div class="pagination-info">
+          Showing <strong id="paginationStart">0</strong> to <strong id="paginationEnd">0</strong> of <strong id="paginationTotal">0</strong> logs
+        </div>
+        <div style="display:flex; align-items:center; gap:8px">
+          <span style="font-size:13px; color:var(--muted)">Per page:</span>
+          <select id="pageSize" style="width:80px; padding:4px 8px">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+        </div>
       </div>
     </div>
   </section>
@@ -383,7 +583,7 @@ tr.new-row{animation:flash .8s ease}
     <div class="modal-head">
       <h3>Log Details</h3>
       <div style="display:flex; gap:6px">
-        <button class="btn btn-sm" id="dmCopy">📋 Copy</button>
+        <button class="btn btn-sm" id="dmCopy">Copy</button>
         <button class="icon-btn" data-close>&times;</button>
       </div>
     </div>
@@ -456,10 +656,10 @@ tr.new-row{animation:flash .8s ease}
   const state = {
     logs: [],
     categories: [],
-    filters: { q: '', level: '', category_id: '' },
+    filters: { q: '', level: '', category_id: '', dateFrom: '', pinned: false, hasFile: false },
+    pageSize: 20,
     editingLogId: null,
     editingCatId: null,
-    notifyEnabled: false,
   };
 
   // =========== HTTP helpers ===========
@@ -515,12 +715,23 @@ tr.new-row{animation:flash .8s ease}
 
   function fmtTime(iso) {
     const d = new Date(iso);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function fmtTimeRelative(iso) {
+    const d = new Date(iso);
     const now = new Date();
-    const same = d.toDateString() === now.toDateString();
-    const opts = same
-      ? { hour: '2-digit', minute: '2-digit', second: '2-digit' }
-      : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return d.toLocaleString(undefined, opts);
+    const diff = Math.floor((now - d) / 1000); // seconds
+
+    if (diff < 60) return diff <= 1 ? 'just now' : `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) {
+      const days = Math.floor(diff / 86400);
+      return days === 1 ? 'yesterday' : `${days}d ago`;
+    }
+    if (diff < 2592000) return `${Math.floor(diff / 604800)}w ago`;
+    return fmtTime(iso);
   }
 
   function fmtSize(b) {
@@ -544,6 +755,11 @@ tr.new-row{animation:flash .8s ease}
     const c = e.target.closest('[data-close]');
     if (c) c.closest('.modal-backdrop').classList.remove('show');
     if (e.target.classList.contains('modal-backdrop')) e.target.classList.remove('show');
+    
+    // Close action menus when clicking outside
+    if (!e.target.closest('.actions')) {
+      $$('.actions-menu.show').forEach(m => m.classList.remove('show'));
+    }
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') $$('.modal-backdrop.show').forEach(m => m.classList.remove('show'));
@@ -558,14 +774,17 @@ tr.new-row{animation:flash .8s ease}
   async function loadLogs() {
     const res = await api('/api/logs?' + buildCurrentLogQuery());
     state.logs = res.logs || [];
+    state.totalLogs = res.total || 0;
     currentLogSignature = buildLogsSignature(state.logs, res.total || 0);
     renderLogs();
+    updatePagination();
     return res;
   }
 
   async function loadStats(force = false) {
     try {
       const s = await api('/api/stats');
+      
       const nextSig = buildStatsSignature(s);
       if (!force && nextSig === currentStatsSignature) {
         return s;
@@ -604,8 +823,10 @@ tr.new-row{animation:flash .8s ease}
   // =========== Rendering: logs ===========
   function renderLogs() {
     const body = $('#logBody');
+    const cards = $('#logCards');
     const empty = $('#logEmpty');
     body.innerHTML = '';
+    cards.innerHTML = '';
     if (!state.logs.length) {
       empty.classList.remove('hidden');
       return;
@@ -613,7 +834,120 @@ tr.new-row{animation:flash .8s ease}
     empty.classList.add('hidden');
     for (const l of state.logs) {
       body.appendChild(renderLogRow(l));
+      cards.appendChild(renderLogCard(l));
     }
+  }
+
+  function renderLogCard(l) {
+    const card = el('div', { class: 'log-card' + (l.pinned ? ' pinned' : '') });
+    
+    // Header: level + category + time
+    const header = el('div', { class: 'log-card-header' });
+    const metaLeft = el('div', { class: 'log-card-meta' });
+    const levelBadge = el('span', { class: 'badge level-' + l.level, title: 'Click to filter' }, [l.level]);
+    levelBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      $('#filterLevel').value = l.level;
+      state.filters.level = l.level;
+      loadLogs();
+    });
+    metaLeft.appendChild(levelBadge);
+    
+    const catDot = el('span', { class: 'cat-dot', style: { background: l.category_color || '#666' } });
+    metaLeft.appendChild(catDot);
+    const catSpan = el('span', { style: { cursor: 'pointer' }, title: 'Click to filter' }, [l.category_name || '—']);
+    catSpan.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (l.category_id) {
+        $('#filterCategory').value = String(l.category_id);
+        state.filters.category_id = String(l.category_id);
+        loadLogs();
+      }
+    });
+    metaLeft.appendChild(catSpan);
+    
+    header.appendChild(metaLeft);
+    
+    // Actions dropdown (reuse same logic as row)
+    const acts = el('div', { class: 'actions' });
+    const menuBtn = el('button', { class: 'actions-menu-btn', title: 'Actions' });
+    menuBtn.innerHTML = '⋮';
+    const menu = el('div', { class: 'actions-menu' });
+    
+    const editItem = el('button', { class: 'actions-menu-item' }, ['Edit']);
+    editItem.addEventListener('click', (e) => { e.stopPropagation(); openLogModal(l); menu.classList.remove('show'); });
+    const pinItem = el('button', { class: 'actions-menu-item' }, [l.pinned ? 'Unpin' : 'Pin']);
+    pinItem.addEventListener('click', (e) => { e.stopPropagation(); pinLog(l.id); menu.classList.remove('show'); });
+    const copyItem = el('button', { class: 'actions-menu-item' }, ['Copy']);
+    copyItem.addEventListener('click', (e) => { e.stopPropagation(); copyText(l.message); menu.classList.remove('show'); });
+    const deleteItem = el('button', { class: 'actions-menu-item danger' }, ['Delete']);
+    deleteItem.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete this log?')) return;
+      await deleteLog(l.id);
+      menu.classList.remove('show');
+    });
+    menu.appendChild(editItem);
+    menu.appendChild(pinItem);
+    menu.appendChild(copyItem);
+    menu.appendChild(deleteItem);
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const allMenus = document.querySelectorAll('.actions-menu.show');
+      allMenus.forEach(m => { if (m !== menu) m.classList.remove('show'); });
+      menu.classList.add('show');
+      menu.style.visibility = 'hidden';
+      requestAnimationFrame(() => {
+        const rect = menu.getBoundingClientRect();
+        if (rect.bottom > window.innerHeight - 20) menu.classList.add('open-up');
+        else menu.classList.remove('open-up');
+        menu.style.visibility = '';
+      });
+    });
+    acts.appendChild(menuBtn);
+    acts.appendChild(menu);
+    header.appendChild(acts);
+    card.appendChild(header);
+    
+    // Message body
+    const msg = el('div', { class: 'log-card-message', title: 'Click to view full message' }, [l.message]);
+    msg.addEventListener('click', () => openDetailModal(l));
+    card.appendChild(msg);
+    
+    // Footer: pin indicator + attachment indicator | time
+    const footer = el('div', { class: 'log-card-footer' });
+    const footerLeft = el('div', { class: 'log-card-meta' });
+    if (l.pinned) {
+      const pinTag = el('span', { style: { color: 'var(--yellow)', fontSize: '11px' } }, ['📌 PINNED']);
+      footerLeft.appendChild(pinTag);
+    }
+    if (l.attachment_name) {
+      const att = el('a', { href: '/uploads/' + l.attachment_path, target: '_blank', style: { color: 'var(--accent)', fontSize: '12px' } }, ['📎 ' + l.attachment_name + ' (' + fmtSize(l.attachment_size) + ')']);
+      att.addEventListener('click', (e) => e.stopPropagation());
+      footerLeft.appendChild(att);
+    }
+    if (!l.pinned && !l.attachment_name) {
+      footerLeft.appendChild(el('span', { style: { fontSize: '11px', color: 'var(--muted)' } }, [fmtTimeRelative(l.created_at)]));
+    }
+    footer.appendChild(footerLeft);
+    const timeDisplay = el('div', { 
+      class: 'log-card-meta',
+      style: { fontSize: '11px', color: 'var(--muted)', marginLeft: 'auto' },
+      title: fmtTimeRelative(l.created_at)
+    }, [new Date(l.created_at).toLocaleString()]);
+    footer.appendChild(timeDisplay);
+    card.appendChild(footer);
+    
+    return card;
+  }
+
+  function updatePagination() {
+    const total = state.totalLogs || 0;
+    const count = state.logs.length;
+    
+    $('#paginationTotal').textContent = total;
+    $('#paginationStart').textContent = count > 0 ? '1' : '0';
+    $('#paginationEnd').textContent = count;
   }
 
   function renderLogRow(l) {
@@ -621,32 +955,104 @@ tr.new-row{animation:flash .8s ease}
     if (l.pinned) tr.classList.add('pinned');
 
     const tdLevel = el('td');
-    tdLevel.appendChild(el('span', { class: 'badge level-' + l.level }, [l.level]));
+    const levelBadge = el('span', { class: 'badge level-' + l.level, title: 'Click to filter by ' + l.level }, [l.level]);
+    levelBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      $('#filterLevel').value = l.level;
+      state.filters.level = l.level;
+      loadLogs();
+    });
+    tdLevel.appendChild(levelBadge);
     tr.appendChild(tdLevel);
 
-    const tdCat = el('td');
+    const tdCat = el('td', { class: 'cat-cell', title: 'Click to filter by ' + (l.category_name || 'category') });
     const dot = el('span', { class: 'cat-dot', style: { background: l.category_color || '#666' } });
     tdCat.appendChild(dot);
     tdCat.appendChild(document.createTextNode(l.category_name || '—'));
+    tdCat.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (l.category_id) {
+        $('#filterCategory').value = String(l.category_id);
+        state.filters.category_id = String(l.category_id);
+        loadLogs();
+      }
+    });
     tr.appendChild(tdCat);
 
     const tdMsg = el('td', { class: 'msg-cell', title: l.message });
     if (l.pinned) {
-      tdMsg.appendChild(el('span', { class: 'pin-icon', html: '📌' }));
+      const pinIcon = el('span', { class: 'pin-icon' });
+      pinIcon.textContent = '[PIN] ';
+      tdMsg.appendChild(pinIcon);
     }
     const display = l.message.length > 80 ? l.message.slice(0, 80) + '…' : l.message;
     tdMsg.appendChild(document.createTextNode(display));
     tdMsg.addEventListener('click', () => openDetailModal(l));
     tr.appendChild(tdMsg);
 
-    tr.appendChild(el('td', {}, [fmtTime(l.created_at)]));
+    const tdTime = el('td', { title: fmtTime(l.created_at) }, [fmtTimeRelative(l.created_at)]);
+    tr.appendChild(tdTime);
 
     const tdAct = el('td');
     const acts = el('div', { class: 'actions' });
-    acts.appendChild(iconBtn('✏', 'Edit', () => openLogModal(l)));
-    acts.appendChild(iconBtn(l.pinned ? '📌' : '📍', l.pinned ? 'Unpin' : 'Pin', () => pinLog(l.id)));
-    acts.appendChild(iconBtn('📋', 'Copy', () => copyText(l.message)));
-    acts.appendChild(iconBtn('🗑', 'Delete', () => deleteLog(l.id), 'danger'));
+    
+    const menuBtn = el('button', { class: 'actions-menu-btn', title: 'Actions' });
+    menuBtn.innerHTML = '⋮';
+    
+    const menu = el('div', { class: 'actions-menu' });
+    
+    const editItem = el('button', { class: 'actions-menu-item' });
+    editItem.innerHTML = '<span>Edit</span>';
+    editItem.addEventListener('click', (e) => { e.stopPropagation(); openLogModal(l); menu.classList.remove('show'); });
+    
+    const pinItem = el('button', { class: 'actions-menu-item' });
+    pinItem.innerHTML = `<span>${l.pinned ? 'Unpin' : 'Pin'}</span>`;
+    pinItem.addEventListener('click', (e) => { e.stopPropagation(); pinLog(l.id); menu.classList.remove('show'); });
+    
+    const copyItem = el('button', { class: 'actions-menu-item' });
+    copyItem.innerHTML = '<span>Copy</span>';
+    copyItem.addEventListener('click', (e) => { e.stopPropagation(); copyText(l.message); menu.classList.remove('show'); });
+    
+    const deleteItem = el('button', { class: 'actions-menu-item danger' });
+    deleteItem.innerHTML = '<span>Delete</span>';
+    deleteItem.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete this log?')) return;
+      await deleteLog(l.id);
+      menu.classList.remove('show');
+    });
+    
+    menu.appendChild(editItem);
+    menu.appendChild(pinItem);
+    menu.appendChild(copyItem);
+    menu.appendChild(deleteItem);
+    
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const allMenus = document.querySelectorAll('.actions-menu.show');
+      allMenus.forEach(m => { if (m !== menu) m.classList.remove('show'); });
+      
+      // Show menu first (hidden) to measure
+      menu.classList.add('show');
+      menu.style.visibility = 'hidden';
+      
+      // Check if menu would go off bottom of viewport
+      requestAnimationFrame(() => {
+        const rect = menu.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        
+        if (rect.bottom > viewportHeight - 20) {
+          menu.classList.add('open-up');
+        } else {
+          menu.classList.remove('open-up');
+        }
+        
+        menu.style.visibility = '';
+      });
+    });
+    
+    acts.appendChild(menuBtn);
+    acts.appendChild(menu);
     tdAct.appendChild(acts);
     tr.appendChild(tdAct);
     return tr;
@@ -844,12 +1250,12 @@ tr.new-row{animation:flash .8s ease}
     grid.appendChild(el('div', { class: 'v' }, [new Date(l.created_at).toLocaleString()]));
     if (l.pinned) {
       grid.appendChild(el('div', { class: 'k' }, ['Status']));
-      grid.appendChild(el('div', { class: 'v' }, ['📌 Pinned']));
+      grid.appendChild(el('div', { class: 'v' }, ['Pinned']));
     }
     if (l.attachment_name) {
       grid.appendChild(el('div', { class: 'k' }, ['Attachment']));
       const a = el('a', { href: '/uploads/' + l.attachment_path, target: '_blank' },
-        ['📎 ' + l.attachment_name + ' (' + fmtSize(l.attachment_size) + ')']);
+        [l.attachment_name + ' (' + fmtSize(l.attachment_size) + ')']);
       grid.appendChild(el('div', { class: 'v' }, [a]));
     }
     body.appendChild(grid);
@@ -935,21 +1341,48 @@ tr.new-row{animation:flash .8s ease}
   // =========== Filters ===========
   let searchTimer = null;
   $('#searchInput').addEventListener('input', e => {
-    state.filters.q = e.target.value;
+    state.filters.q = e.target.value.trim();
     clearTimeout(searchTimer);
     searchTimer = setTimeout(loadLogs, 180);
   });
+  
   $('#filterLevel').addEventListener('change', e => {
     state.filters.level = e.target.value; loadLogs();
   });
+  
   $('#filterCategory').addEventListener('change', e => {
     state.filters.category_id = e.target.value; loadLogs();
   });
+  
+  $('#filterDateFrom').addEventListener('change', e => {
+    state.filters.dateFrom = e.target.value; loadLogs();
+  });
+  
+  $('#filterPinned').addEventListener('change', e => {
+    state.filters.pinned = e.target.checked;
+    console.log('Pinned filter changed:', state.filters.pinned);
+    loadLogs();
+  });
+  
+  $('#filterHasFile').addEventListener('change', e => {
+    state.filters.hasFile = e.target.checked;
+    console.log('HasFile filter changed:', state.filters.hasFile);
+    loadLogs();
+  });
+  
+  $('#pageSize').addEventListener('change', e => {
+    state.pageSize = parseInt(e.target.value) || 20;
+    loadLogs();
+  });
+  
   $('#btnClearFilters').addEventListener('click', () => {
-    state.filters = { q: '', level: '', category_id: '' };
+    state.filters = { q: '', level: '', category_id: '', dateFrom: '', pinned: false, hasFile: false };
     $('#searchInput').value = '';
     $('#filterLevel').value = '';
     $('#filterCategory').value = '';
+    $('#filterDateFrom').value = '';
+    $('#filterPinned').checked = false;
+    $('#filterHasFile').checked = false;
     loadLogs();
   });
 
@@ -1111,7 +1544,30 @@ tr.new-row{animation:flash .8s ease}
     if (state.filters.q) qs.set('q', state.filters.q);
     if (state.filters.level) qs.set('level', state.filters.level);
     if (state.filters.category_id) qs.set('category_id', state.filters.category_id);
-    qs.set('limit', String(limit || 500));
+    if (state.filters.pinned) qs.set('pinned', 'true');
+    if (state.filters.hasFile) qs.set('has_file', 'true');
+    
+    // Handle date filter
+    if (state.filters.dateFrom) {
+      const since = new Date(state.filters.dateFrom + 'T00:00:00');
+      if (!isNaN(since.getTime())) {
+        qs.set('since', since.toISOString());
+      }
+    }
+    
+    qs.set('limit', String(limit || state.pageSize || 20));
+    
+    console.log('Building query:', {
+      q: state.filters.q,
+      level: state.filters.level,
+      category_id: state.filters.category_id,
+      pinned: state.filters.pinned,
+      hasFile: state.filters.hasFile,
+      dateFrom: state.filters.dateFrom,
+      limit: limit || state.pageSize || 20,
+      queryString: qs.toString()
+    });
+    
     return qs.toString();
   }
 
@@ -1174,35 +1630,18 @@ tr.new-row{animation:flash .8s ease}
 
   // Check for new ERROR/CRITICAL logs that were NOT created by this browser
   function checkAlertNotifications(logs) {
-    if (!state.notifyEnabled) return;
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-    const now = Date.now();
-    for (const l of logs || []) {
-      // Only notify for ERROR or CRITICAL
-      if (l.level !== 'ERROR' && l.level !== 'CRITICAL') continue;
-      // Skip logs created by this browser session
-      if (locallyCreatedLogIDs.has(l.id)) continue;
-      // Only notify for logs created in the last 10 seconds (fresh alerts)
-      const age = now - new Date(l.created_at).getTime();
-      if (age > 15000) continue;
-
-      // Mark as seen so we don't notify again for the same log
-      locallyCreatedLogIDs.add(l.id);
-      showNotification(l);
-    }
+    // Notification feature removed
   }
 
   function pollForChanges() {
     Promise.all([
-      api('/api/logs?' + buildCurrentLogQuery(500)),
+      api('/api/logs?' + buildCurrentLogQuery()),
       api('/api/logs?limit=50')
     ]).then(([visibleRes, alertRes]) => {
       consecutivePollFailures = 0;
       setConnState('online');
 
       const visibleChanged = syncVisibleLogs(visibleRes.logs || [], visibleRes.total || 0);
-      checkAlertNotifications(alertRes.logs || []);
 
       if (visibleChanged && !$('#tabStats').classList.contains('hidden')) {
         loadStats();
@@ -1233,113 +1672,29 @@ tr.new-row{animation:flash .8s ease}
     }
   }
 
-  // =========== Browser notifications ===========
-  function updateNotifyButton() {
-    if (!('Notification' in window)) {
-      $('#btnNotify').disabled = true;
-      $('#btnNotify').title = 'Notifications not supported in this browser';
-      $('#btnNotify').textContent = '🔕 N/A';
-      return;
-    }
-    if (Notification.permission === 'granted') {
-      if (state.notifyEnabled) {
-        $('#btnNotify').textContent = '🔔 On';
-        $('#btnNotify').title = 'Click to disable notifications';
-      } else {
-        $('#btnNotify').textContent = '🔕 Off';
-        $('#btnNotify').title = 'Click to enable notifications';
-      }
-    } else if (Notification.permission === 'denied') {
-      $('#btnNotify').textContent = '🚫 Blocked';
-      $('#btnNotify').title = 'Notifications blocked in browser settings';
-      state.notifyEnabled = false;
-    } else {
-      // 'default' — not yet asked
-      $('#btnNotify').textContent = '🔔 Enable';
-      $('#btnNotify').title = 'Click to enable notifications';
-      state.notifyEnabled = false;
-    }
-  }
-
-  function setupNotifications() {
-    updateNotifyButton();
-    // If permission was previously granted, auto-enable
-    if (Notification.permission === 'granted') {
-      state.notifyEnabled = true;
-      updateNotifyButton();
-    }
-  }
-
-  $('#btnNotify').addEventListener('click', async () => {
-    if (!('Notification' in window)) {
-      toast('Notifications not supported in this browser', 'error');
-      return;
-    }
-    // If already granted, toggle on/off
-    if (Notification.permission === 'granted') {
-      state.notifyEnabled = !state.notifyEnabled;
-      updateNotifyButton();
-      toast(state.notifyEnabled ? 'Notifications ON' : 'Notifications OFF', 'ok');
-      return;
-    }
-    // If denied, tell user to change browser settings
-    if (Notification.permission === 'denied') {
-      toast('Notifications are blocked. Please enable them in your browser settings for this site.', 'error');
-      return;
-    }
-    // Request permission
-    try {
-      const perm = await Notification.requestPermission();
-      if (perm === 'granted') {
-        state.notifyEnabled = true;
-        updateNotifyButton();
-        toast('Notifications enabled! You will be alerted for new ERROR & CRITICAL logs.', 'ok');
-      } else {
-        state.notifyEnabled = false;
-        updateNotifyButton();
-        toast('Notifications blocked', 'error');
-      }
-    } catch (err) {
-      toast('Notification request failed', 'error');
-      console.error('Notification request failed:', err);
-    }
-  });
-
-  function showNotification(l) {
-    try {
-      const short = (l.message || '').length > 120 ? l.message.slice(0, 120) + '…' : (l.message || '');
-      const n = new Notification(l.level + ' — ' + (l.category_name || 'Log'), {
-        body: short,
-        tag: 'log-' + l.id,
-        renotify: false,
-        silent: false,
-        icon: '/static/favicon.ico'
-      });
-      n.onclick = () => {
-        window.focus();
-        n.close();
-      };
-      n.onerror = (event) => {
-        console.error('Notification failed for log', l.id, event);
-      };
-    } catch (err) {
-      console.error('Notification error for log', l.id, err);
-    }
-  }
-
-  // =========== Dropdown Menu ===========
+  // =========== Dropdown Menus ===========
   const dataMenu = $('#dataMenu');
+  const userMenu = $('#userMenu');
+  
   $('#btnData').addEventListener('click', (e) => {
     e.stopPropagation();
+    userMenu.classList.remove('show');
     dataMenu.classList.toggle('show');
   });
-
-  // Close dropdown when clicking outside
-  document.addEventListener('click', () => {
+  
+  $('#btnUserMenu').addEventListener('click', (e) => {
+    e.stopPropagation();
     dataMenu.classList.remove('show');
+    userMenu.classList.toggle('show');
   });
 
-  // Dropdown menu handlers
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', () => {
+    dataMenu.classList.remove('show');
+    userMenu.classList.remove('show');
+  });
+
+  // Data menu handlers
   $('#menuImportCSV').addEventListener('click', () => {
     dataMenu.classList.remove('show');
     $('#imFormat').value = 'csv';
@@ -1375,10 +1730,30 @@ tr.new-row{animation:flash .8s ease}
     qs.set('format', 'json');
     window.location.href = '/api/export?' + qs.toString();
   });
+  
+  // User menu handlers
+  $('#menuLogout').addEventListener('click', async () => {
+    userMenu.classList.remove('show');
+    try {
+      await api('/api/logout', { method: 'POST' });
+      window.location.href = '/login';
+    } catch (e) {
+      toast('Logout failed', 'error');
+    }
+  });
+  
+  $('#menuChangePassword').addEventListener('click', () => {
+    userMenu.classList.remove('show');
+    toast('Change password feature coming soon', 'ok');
+  });
+  
+  $('#menuTheme').addEventListener('click', () => {
+    userMenu.classList.remove('show');
+    toast('Theme toggle feature coming soon', 'ok');
+  });
 
   // =========== Init ===========
   (async () => {
-    setupNotifications();
     try {
       // Fetch current user info
       const userRes = await api('/api/me');
@@ -1395,15 +1770,6 @@ tr.new-row{animation:flash .8s ease}
       }
     }
   })();
-
-  $('#btnLogout').addEventListener('click', async () => {
-    try {
-      await api('/api/logout', { method: 'POST' });
-      window.location.href = '/login';
-    } catch (e) {
-      toast('Logout failed', 'error');
-    }
-  });
 
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {

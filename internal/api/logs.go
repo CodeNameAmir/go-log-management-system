@@ -305,6 +305,30 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 			f.CategoryID = v
 		}
 	}
+	
+	// Handle pinned filter
+	if pinnedStr := r.URL.Query().Get("pinned"); pinnedStr != "" {
+		if pinnedStr == "true" {
+			pinnedVal := true
+			f.Pinned = &pinnedVal
+		} else if pinnedStr == "false" {
+			pinnedVal := false
+			f.Pinned = &pinnedVal
+		}
+	}
+	
+	// Handle has_file filter
+	if hasFileStr := r.URL.Query().Get("has_file"); hasFileStr == "true" {
+		f.HasFile = true
+	}
+	
+	// Handle since filter
+	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
+		if sinceTime, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			f.Since = &sinceTime
+		}
+	}
+	
 	f.Limit = 500
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < 2000 {

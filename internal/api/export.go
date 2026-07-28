@@ -25,7 +25,16 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	if userID != "" {
 		userIDInt, _ = strconv.ParseInt(userID, 10, 64)
 	}
-	st, err := s.getDB(r).Stats(r.Context(), userIDInt)
+	
+	// Parse since parameter for time filtering
+	var sinceTime *time.Time
+	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			sinceTime = &parsedTime
+		}
+	}
+	
+	st, err := s.getDB(r).StatsWithFilter(r.Context(), userIDInt, sinceTime)
 	if err != nil {
 		slog.Error("stats", "err", err)
 		writeError(w, http.StatusInternalServerError, "stats failed")

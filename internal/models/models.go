@@ -73,6 +73,9 @@ type Filter struct {
 	Search     string
 	Level      string
 	CategoryID int64 // 0 = any
+	Pinned     *bool // nil = any, true = only pinned, false = only unpinned
+	HasFile    bool  // true = only logs with attachments
+	Since      *time.Time // nil = any, otherwise filter by created_at >= since
 	Limit      int
 	Offset     int
 }

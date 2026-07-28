@@ -41,6 +41,7 @@ type Storer interface {
 	SetAttachment(ctx context.Context, logID int64, name, path string, size int64) error
 	ClearAttachment(ctx context.Context, logID int64) (string, error)
 	Stats(ctx context.Context, userID int64) (models.Stats, error)
+	StatsWithFilter(ctx context.Context, userID int64, since *time.Time) (models.Stats, error)
 	CreateUser(ctx context.Context, username, passwordHash string) (int64, error)
 	GetUserByUsername(ctx context.Context, username string) (models.User, error)
 	GetUserByID(ctx context.Context, id int64) (models.User, error)
@@ -814,6 +815,20 @@ func buildWhere(f models.Filter) (string, []interface{}) {
 		clauses = append(clauses, `l.category_id = ?`)
 		args = append(args, f.CategoryID)
 	}
+	if f.Pinned != nil {
+		if *f.Pinned {
+			clauses = append(clauses, `l.pinned = 1`)
+		} else {
+			clauses = append(clauses, `l.pinned = 0`)
+		}
+	}
+	if f.HasFile {
+		clauses = append(clauses, `l.attachment_name IS NOT NULL AND l.attachment_name != ''`)
+	}
+	if f.Since != nil {
+		clauses = append(clauses, `l.created_at >= ?`)
+		args = append(args, f.Since.Format(time.RFC3339))
+	}
 	if len(clauses) == 0 {
 		return "", nil
 	}
@@ -855,14 +870,38 @@ func (db *DB) ClearAttachment(ctx context.Context, logID int64) (string, error) 
 
 // Stats returns aggregate stats for the dashboard.
 func (db *DB) Stats(ctx context.Context, userID int64) (models.Stats, error) {
+	return db.StatsWithFilter(ctx, userID, nil)
+}
+
+// StatsWithFilter returns aggregate stats filtered by date.
+func (db *DB) StatsWithFilter(ctx context.Context, userID int64, since *time.Time) (models.Stats, error) {
 	s := models.Stats{}
-	if err := db.stmtCountLogsAll.QueryRowContext(ctx, userID).Scan(&s.TotalLogs); err != nil {
+	
+	// Build WHERE clause for date filtering
+	whereClause := ""
+	var args []interface{}
+	
+	if since != nil {
+		whereClause = " AND created_at >= ?"
+		args = append(args, since.Format(time.RFC3339))
+	}
+	
+	// Count total logs
+	countSQL := `SELECT COUNT(*) FROM logs WHERE user_id = ?` + whereClause
+	countArgs := append([]interface{}{userID}, args...)
+	if err := db.conn.QueryRowContext(ctx, countSQL, countArgs...).Scan(&s.TotalLogs); err != nil {
 		return s, err
 	}
+	
+	// Count categories
 	if err := db.stmtCountCats.QueryRowContext(ctx).Scan(&s.TotalCategories); err != nil {
 		return s, err
 	}
-	rows, err := db.stmtStatsLevels.QueryContext(ctx, userID)
+	
+	// Stats by level
+	levelsSQL := `SELECT level, COUNT(*) FROM logs WHERE user_id = ?` + whereClause + ` GROUP BY level`
+	levelsArgs := append([]interface{}{userID}, args...)
+	rows, err := db.conn.QueryContext(ctx, levelsSQL, levelsArgs...)
 	if err != nil {
 		return s, err
 	}
@@ -888,7 +927,21 @@ func (db *DB) Stats(ctx context.Context, userID int64) (models.Stats, error) {
 	}
 	rows.Close()
 
-	rows, err = db.stmtStatsByCat.QueryContext(ctx, userID)
+	// Stats by category - FIX: Add WHERE clause correctly in subquery
+	catSQL := `
+		SELECT c.id, c.name, c.color, COUNT(l.id)
+		FROM categories c
+		LEFT JOIN logs l ON l.category_id = c.id AND l.user_id = ?`
+	if since != nil {
+		catSQL += ` AND l.created_at >= ?`
+	}
+	catSQL += `
+		GROUP BY c.id, c.name, c.color
+		HAVING COUNT(l.id) > 0
+		ORDER BY COUNT(l.id) DESC
+	`
+	catArgs := append([]interface{}{userID}, args...)
+	rows, err = db.conn.QueryContext(ctx, catSQL, catArgs...)
 	if err != nil {
 		return s, err
 	}
@@ -902,7 +955,17 @@ func (db *DB) Stats(ctx context.Context, userID int64) (models.Stats, error) {
 	}
 	rows.Close()
 
-	rows, err = db.stmtStatsByDay.QueryContext(ctx, userID)
+	// Stats by day (last 30 days)
+	daySQL := `
+		SELECT DATE(created_at) as day, COUNT(*)
+		FROM logs
+		WHERE user_id = ?` + whereClause + `
+		GROUP BY DATE(created_at)
+		ORDER BY day DESC
+		LIMIT 30
+	`
+	dayArgs := append([]interface{}{userID}, args...)
+	rows, err = db.conn.QueryContext(ctx, daySQL, dayArgs...)
 	if err != nil {
 		return s, err
 	}
@@ -915,6 +978,7 @@ func (db *DB) Stats(ctx context.Context, userID int64) (models.Stats, error) {
 		s.ByDay = append(s.ByDay, dc)
 	}
 	rows.Close()
+	
 	// reverse by day so chart is chronological
 	for i, j := 0, len(s.ByDay)-1; i < j; i, j = i+1, j-1 {
 		s.ByDay[i], s.ByDay[j] = s.ByDay[j], s.ByDay[i]
