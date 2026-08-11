@@ -1,5 +1,7 @@
 # Compiled binaries
 log-server.exe
+log-management
+log-server
 *.exe~
 
 # Database files

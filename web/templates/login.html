@@ -4,12 +4,36 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Login - Log Server</title>
+  <script>
+    (function () {
+      try {
+        var allowed = ['dark', 'light', 'midnight', 'forest', 'royal', 'warm'];
+        var t = localStorage.getItem('theme');
+        if (allowed.indexOf(t) === -1) {
+          t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+        }
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
   <style>
     :root {
       --bg: #0d0d0d; --bg-2: #141414; --bg-3: #1a1a1a; --border: #2a2a2a;
       --text: #f0f0f0; --muted: #888888; --accent: #3b82f6;
       --radius: 8px;
+      color-scheme: dark;
     }
+    :root[data-theme="light"] {
+      --bg: #e9e5dd; --bg-2: #f6f3ed; --bg-3: #ddd8cd; --border: #c7c1b4;
+      --text: #2c2a26; --muted: #6f6a60; --accent: #b07a2e;
+      color-scheme: light;
+    }
+    :root[data-theme="light"] .db-option.active { background: #efe4cd; }
+    :root[data-theme="light"] .auth-card { box-shadow: 0 10px 25px rgba(0,0,0,.12); }
+    :root[data-theme="midnight"] { --accent: #3b82f6; }
+    :root[data-theme="forest"] { --accent: #22c55e; }
+    :root[data-theme="royal"] { --accent: #a855f7; }
+    :root[data-theme="warm"] { --accent: #f59e0b; }
     body {
       margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
       background: var(--bg); color: var(--text);
