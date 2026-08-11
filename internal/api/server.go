@@ -93,6 +93,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/login", s.handleLogin)
 	s.mux.HandleFunc("POST /api/logout", s.handleLogout)
 	s.mux.HandleFunc("GET /api/me", s.RequireAuth(s.handleMe))
+	s.mux.HandleFunc("POST /api/change-password", s.RequireAuth(s.handleChangePassword))
 
 	// Supabase config (public - anon key is meant to be client-side)
 	s.mux.HandleFunc("GET /api/config", s.handleConfig)

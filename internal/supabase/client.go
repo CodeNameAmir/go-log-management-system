@@ -156,6 +156,11 @@ func (c *Client) GetAuthUser(ctx context.Context) (id, email string, err error) 
 	return res.ID, res.Email, nil
 }
 
+// UpdateUserPassword changes the password for the authenticated GoTrue user.
+func (c *Client) UpdateUserPassword(ctx context.Context, newPassword string) error {
+	return c.do("PUT", c.base+"/auth/v1/user", map[string]string{"password": newPassword}, nil, "")
+}
+
 // ---- data operations ----
 
 func (c *Client) ListCategories(ctx context.Context) ([]models.Category, error) {
@@ -495,4 +500,10 @@ func (c *Client) GetUserByUsername(ctx context.Context, username string) (models
 
 func (c *Client) GetUserByID(ctx context.Context, id int64) (models.User, error) {
 	return models.User{}, errors.New("supabase: GetUserByID not applicable for numeric ID")
+}
+
+// UpdatePassword satisfies database.Storer. It is not applicable to Supabase;
+// use GoTrue (UpdateUserPassword) instead.
+func (c *Client) UpdatePassword(ctx context.Context, id int64, passwordHash string) error {
+	return errors.New("supabase: UpdatePassword not applicable; use GoTrue UpdateUserPassword")
 }

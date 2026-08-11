@@ -45,6 +45,7 @@ type Storer interface {
 	CreateUser(ctx context.Context, username, passwordHash string) (int64, error)
 	GetUserByUsername(ctx context.Context, username string) (models.User, error)
 	GetUserByID(ctx context.Context, id int64) (models.User, error)
+	UpdatePassword(ctx context.Context, id int64, passwordHash string) error
 }
 
 // Compile-time assertion: *DB implements Storer.
@@ -78,8 +79,9 @@ type DB struct {
 	stmtDeleteCat    *sql.Stmt
 	stmtInsertAttach *sql.Stmt
 	stmtGetAttach    *sql.Stmt
-	stmtDeleteAttach *sql.Stmt
-	stmtInsertUser   *sql.Stmt
+	stmtDeleteAttach   *sql.Stmt
+	stmtInsertUser     *sql.Stmt
+	stmtUpdatePassword *sql.Stmt
 }
 
 // Open opens (or creates) the SQLite database at path, runs migrations,
@@ -150,6 +152,7 @@ func (db *DB) Close() error {
 		db.stmtInsertLog, db.stmtUpdateLog, db.stmtDeleteLog, db.stmtPinLog,
 		db.stmtInsertCat, db.stmtUpdateCat, db.stmtDeleteCat,
 		db.stmtInsertAttach, db.stmtGetAttach, db.stmtDeleteAttach,
+		db.stmtUpdatePassword,
 	}
 	for _, s := range stmts {
 		if s != nil {
@@ -352,6 +355,11 @@ func (db *DB) prepare() error {
 	}
 	db.stmtGetUserByID, err = db.conn.Prepare(`
 		SELECT id, username, password_hash, created_at FROM users WHERE id = ?`)
+	if err != nil {
+		return err
+	}
+	db.stmtUpdatePassword, err = db.conn.Prepare(`
+		UPDATE users SET password_hash = ? WHERE id = ?`)
 	if err != nil {
 		return err
 	}
@@ -1028,6 +1036,24 @@ func (db *DB) GetUserByID(ctx context.Context, id int64) (models.User, error) {
 		return u, ErrNotFound
 	}
 	return u, err
+}
+
+// UpdatePassword replaces the password hash for a user. Returns ErrNotFound
+// if no user with the given ID exists.
+func (db *DB) UpdatePassword(ctx context.Context, id int64, passwordHash string) error {
+	res, err := db.stmtUpdatePassword.ExecContext(ctx, passwordHash, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	// libsql remote may return 0 rows affected even on success
+	if n == 0 {
+		var exists bool
+		if err := db.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)`, id).Scan(&exists); err != nil || !exists {
+			return ErrNotFound
+		}
+	}
+	return nil
 }
 
 // SafeFileName returns a sanitized base name suitable for storage.

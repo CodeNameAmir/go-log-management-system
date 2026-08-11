@@ -358,6 +358,102 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		writeError(w, http.StatusBadRequest, "password must be at least 6 characters")
+		return
+	}
+
+	cookie, err := r.Cookie(sessionKey)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	sess, ok := s.sessions.GetSession(cookie.Value)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	dbType := sess.DBType
+	if dbType == "" {
+		dbType = "local"
+	}
+
+	// Supabase path: change password through GoTrue
+	if dbType == "supabase" {
+		if s.sb == nil {
+			writeError(w, http.StatusServiceUnavailable, "supabase not configured")
+			return
+		}
+		sc := s.sb.Clone(sess.JWT)
+		if err := sc.UpdateUserPassword(r.Context(), req.NewPassword); err != nil {
+			slog.Error("supabase change password", "err", err)
+			writeError(w, http.StatusInternalServerError, "failed to update password")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
+
+	// Local/Turso path
+	userID := sess.UserID
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	userIDInt, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "invalid user id")
+		return
+	}
+
+	db := s.getDB(r)
+	u, err := db.GetUserByID(r.Context(), userIDInt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+		writeError(w, http.StatusUnauthorized, "current password is incorrect")
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "encryption failed")
+		return
+	}
+
+	if err := db.UpdatePassword(r.Context(), userIDInt, string(hash)); err != nil {
+		slog.Error("failed to update password", "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to update password")
+		return
+	}
+
+	// Keep the password hash in sync across local and Turso DBs.
+	for _, syncDB := range []database.Storer{s.db, s.dbTurso} {
+		if syncDB == nil || syncDB == db {
+			continue
+		}
+		if su, err := syncDB.GetUserByUsername(r.Context(), u.Username); err == nil {
+			_ = syncDB.UpdatePassword(r.Context(), su.ID, string(hash))
+		}
+	}
+
+	log.Printf("Password changed for user: %s (ID: %d, DB: %s)", u.Username, u.ID, dbType)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionKey)
 	if err == nil {

@@ -148,11 +148,11 @@ tr.new-row{animation:flash .8s ease}
   transition:all .15s;
 }
 .badge:hover{opacity:.8; transform:scale(1.05)}
-.level-DEBUG    {background:#1e293b; color:#94a3b8; border-color:#334155}
-.level-INFO     {background:#065f46; color:#6ee7b7; border-color:#047857}
-.level-WARNING  {background:rgba(234,179,8,.12);  color:#fde68a; border-color:#713f12}
-.level-ERROR    {background:rgba(239,68,68,.14);   color:#fca5a5; border-color:#7f1d1d}
-.level-CRITICAL {background:rgba(168,85,247,.14);  color:#d8b4fe; border-color:#6b21a8; animation:pulse 2s infinite}
+.level-DEBUG {background:rgba(59,130,246,.2); color:#93c5fd; border-color:#2563eb}
+.level-INFO {background:rgba(16,185,129,.18); color:#6ee7b7; border-color:#047857}
+.level-WARNING  {background:rgba(234,179,8,.2);  color:#fde68a; border-color:#713f12}
+.level-ERROR    {background:rgba(239,68,68,.2);   color:#fca5a5; border-color:#7f1d1d}
+.level-CRITICAL {background:rgba(168,85,247,.2);  color:#d8b4fe; border-color:#6b21a8; animation:pulse 2s infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 3px rgba(168,85,247,.2)}}
 
 .cat-badge{display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; letter-spacing:.04em; color:#fff; cursor:pointer; transition:all .15s}
@@ -648,6 +648,33 @@ tr.new-row{animation:flash .8s ease}
 </div>
 
 <div class="toasts" id="toasts"></div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="modal-backdrop" id="passwordModal">
+  <div class="modal">
+    <div class="modal-head"><h3>Change Password</h3>
+      <button class="icon-btn" data-close>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Current Password</label>
+        <input type="password" id="cpCurrent" autocomplete="current-password" />
+      </div>
+      <div class="field">
+        <label>New Password</label>
+        <input type="password" id="cpNew" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label>Confirm New Password</label>
+        <input type="password" id="cpConfirm" autocomplete="new-password" />
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn btn-primary" id="cpSave">Save</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -1741,7 +1768,30 @@ tr.new-row{animation:flash .8s ease}
   
   $('#menuChangePassword').addEventListener('click', () => {
     userMenu.classList.remove('show');
-    toast('Change password feature coming soon', 'ok');
+    $('#cpCurrent').value = '';
+    $('#cpNew').value = '';
+    $('#cpConfirm').value = '';
+    openModal('passwordModal');
+    $('#cpCurrent').focus();
+  });
+  
+  $('#cpSave').addEventListener('click', async () => {
+    const current = $('#cpCurrent').value;
+    const next = $('#cpNew').value;
+    const confirm = $('#cpConfirm').value;
+    if (!current) { toast('Current password required', 'error'); return; }
+    if (next.length < 6) { toast('New password must be at least 6 characters', 'error'); return; }
+    if (next !== confirm) { toast('New passwords do not match', 'error'); return; }
+    try {
+      await api('/api/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ current_password: current, new_password: next }),
+      });
+      closeModal('passwordModal');
+      toast('Password changed', 'ok');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   });
   
   $('#menuTheme').addEventListener('click', () => {
