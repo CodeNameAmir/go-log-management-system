@@ -14,6 +14,15 @@ import (
 	"log-server/internal/models"
 )
 
+// ColorEnabled controls whether terminal log output uses ANSI escape codes.
+// It is set by the main package based on the detected terminal capabilities.
+var ColorEnabled = true
+
+// SetColorEnabled updates the terminal color output setting.
+func SetColorEnabled(enabled bool) {
+	ColorEnabled = enabled
+}
+
 // ----- Log Handlers -----
 
 type logCreateReq struct {
@@ -370,6 +379,13 @@ func printLogEntry(level, category, message string) {
 	if len(message) > 60 {
 		message = message[:57] + "..."
 	}
+	timestamp := time.Now().Format("15:04:05")
+	// Pad level for alignment
+	levelPadded := fmt.Sprintf("%-8s", level)
+	if !ColorEnabled {
+		fmt.Printf("%s %s[%s] %s\n", timestamp, levelPadded, category, message)
+		return
+	}
 	// Use ANSI colors for terminal output
 	var colorCode string
 	switch level {
@@ -387,8 +403,5 @@ func printLogEntry(level, category, message string) {
 		colorCode = "\033[0m"
 	}
 	reset := "\033[0m"
-	timestamp := time.Now().Format("15:04:05")
-	// Pad level for alignment
-	levelPadded := fmt.Sprintf("%-8s", level)
 	fmt.Printf("%s%s %s[%s]%s %s%s\n", colorCode, timestamp, levelPadded, category, reset, message, reset)
 }

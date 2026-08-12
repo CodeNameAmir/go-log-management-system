@@ -34,7 +34,7 @@ var webFS embed.FS
 //go:embed icon.ico
 var trayIcon []byte
 
-const version = "1.1.0"
+const version = "1.3.1"
 
 // ANSI color codes for terminal output
 const (
@@ -47,6 +47,12 @@ const (
 )
 
 var serverAddr string
+
+// colorEnabled is detected once at startup based on the terminal capabilities.
+var colorEnabled = detectColorSupport()
+
+// noColor forces plain output when --no-color is passed.
+var noColor bool
 
 // quitChan is a global channel used to signal shutdown from the tray menu.
 var quitChan = make(chan os.Signal, 1)
@@ -61,36 +67,38 @@ func main() {
 	uploadDir := flag.String("uploads", "uploads", "Directory for uploaded files")
 	maxUpload := flag.Int64("max-upload", 1<<30, "Max upload size in bytes (default 1 GiB)")
 	debug := flag.Bool("debug", false, "Enable debug logging")
+	noColorFlag := flag.Bool("no-color", false, "Disable colored terminal output")
 	flag.Parse()
 	serverAddr = *addr
+	noColor = *noColorFlag
 
-	// If --turso flag is set, use default Turso URL and token unless overridden
+	// Load optional configuration from config.json (used as defaults for Supabase and Turso)
+	var fileCfg struct {
+		SupabaseURL string `json:"supabase_url"`
+		SupabaseKey string `json:"supabase_key"`
+		TursoURL    string `json:"turso_url"`
+		TursoToken  string `json:"turso_token"`
+	}
+	if cfgFile, err := os.ReadFile("config.json"); err == nil {
+		_ = json.Unmarshal(cfgFile, &fileCfg)
+	}
+
+	// If --turso flag is set, use Turso URL and token from config.json unless overridden by flags
 	if *turso {
 		if *dbPath == "logs.db" {
-			*dbPath = "libsql://test-codenameamir.aws-ap-northeast-1.turso.io"
+			*dbPath = fileCfg.TursoURL
 		}
 		if *dbToken == "" {
-			*dbToken = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiIwZWNlN2NiMS0yYzliLTQwNWUtOTBmNi1mMjE5ZGExMDQ1MjQiLCJpYXQiOjE3ODMxNjM1OTIsImtpZCI6IjBzNTZfOGFGa3l3Q0tKX09nbG5WejFNdTUzQWp3TWRIdERZUmQtbkJHQjQiLCJyaWQiOiJmNjM0NjI3Yi1iNzBkLTQ1NWEtYTc0Yi02NDk2Njc2Y2U0ZDUifQ.F5XJjdcIRLHGsmmiKhZ3wZFZeKrv5yb8SKXDSEkDDP6G1ql1Tj1PSyTzBx3fk50RJdZK5MzzCxKIXaRyFgmaBw"
+			*dbToken = fileCfg.TursoToken
 		}
 	}
 
-	// If no Supabase flags provided, try loading from config.json
-	if *supabaseURL == "" || *supabaseKey == "" {
-		cfgFile, err := os.ReadFile("config.json")
-		if err == nil {
-			var fileCfg struct {
-				SupabaseURL string `json:"supabase_url"`
-				SupabaseKey string `json:"supabase_key"`
-			}
-			if err := json.Unmarshal(cfgFile, &fileCfg); err == nil {
-				if *supabaseURL == "" && fileCfg.SupabaseURL != "" {
-					*supabaseURL = fileCfg.SupabaseURL
-				}
-				if *supabaseKey == "" && fileCfg.SupabaseKey != "" {
-					*supabaseKey = fileCfg.SupabaseKey
-				}
-			}
-		}
+	// If no Supabase flags provided, use config.json values
+	if *supabaseURL == "" {
+		*supabaseURL = fileCfg.SupabaseURL
+	}
+	if *supabaseKey == "" {
+		*supabaseKey = fileCfg.SupabaseKey
 	}
 
 	// Determine log level based on --debug flag
@@ -103,9 +111,13 @@ func main() {
 	handler := &coloredHandler{
 		w:     os.Stderr,
 		level: level,
+		color: isTerminalColorSupported(),
 	}
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
+
+	// Propagate color support to the API package
+	api.SetColorEnabled(isTerminalColorSupported())
 
 	// Print startup banner
 	printBanner(*addr, *dbPath, *supabaseURL)
@@ -121,18 +133,16 @@ func main() {
 	defer db.Close()
 	printSuccess("Database: Connected (%s)", *dbPath)
 
-	// Open Turso database (if configured)
+	// Open Turso database (if configured in config.json)
 	var dbTurso *database.DB
-	tursoURL := "libsql://test-codenameamir.aws-ap-northeast-1.turso.io"
-	tursoToken := "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiIwZWNlN2NiMS0yYzliLTQwNWUtOTBmNi1mMjE5ZGExMDQ1MjQiLCJpYXQiOjE3ODMxNjM1OTIsImtpZCI6IjBzNTZfOGFGa3l3Q0tKX09nbG5WejFNdTUzQWp3TWRIdERZUmQtbkJHQjQiLCJyaWQiOiJmNjM0NjI3Yi1iNzBkLTQ1NWEtYTc0Yi02NDk2Njc2Y2U0ZDUifQ.F5XJjdcIRLHGsmmiKhZ3wZFZeKrv5yb8SKXDSEkDDP6G1ql1Tj1PSyTzBx3fk50RJdZK5MzzCxKIXaRyFgmaBw"
-	tursoDSN := fmt.Sprintf("%s?authToken=%s", tursoURL, tursoToken)
-
-	dbTurso, err2 := database.Open(tursoDSN)
-	if err2 != nil {
-		printWarn("Turso database not available (%v). Only local DB will be used.", err2)
-	} else {
-		defer dbTurso.Close()
-		printSuccess("Database: Connected (%s)", tursoURL)
+	if fileCfg.TursoURL != "" {
+		dbTurso, err = database.Open(buildDSN(fileCfg.TursoURL, fileCfg.TursoToken))
+		if err != nil {
+			printWarn("Turso database not available (%v). Only local DB will be used.", err)
+		} else {
+			defer dbTurso.Close()
+			printSuccess("Database: Connected (%s)", fileCfg.TursoURL)
+		}
 	}
 
 	broker := api.NewBroker()
@@ -148,7 +158,7 @@ func main() {
 		} else {
 			supabaseClient = sc
 			printSuccess("Supabase: Connected (%s)", *supabaseURL)
-			printInfo("Supabase: Signup/login via GoTrue, data via PostgREST")
+			// printInfo("Supabase: Signup/login via GoTrue, data via PostgREST")
 		}
 	}
 
@@ -307,6 +317,7 @@ func (sw *statusWriter) Flush() {
 type coloredHandler struct {
 	w     io.Writer
 	level slog.Level
+	color bool
 }
 
 func (h *coloredHandler) Enabled(context.Context, slog.Level) bool { return true }
@@ -316,35 +327,46 @@ func (h *coloredHandler) Handle(_ context.Context, r slog.Record) error {
 		return nil
 	}
 
-	var levelColor string
-	switch r.Level {
-	case slog.LevelDebug:
-		levelColor = colorCyan
-	case slog.LevelInfo:
-		levelColor = colorGreen
-	case slog.LevelWarn:
-		levelColor = colorYellow
-	case slog.LevelError:
-		levelColor = colorRed
-	default:
-		levelColor = colorReset
-	}
+	var buf string
+	if h.color {
+		var levelColor string
+		switch r.Level {
+		case slog.LevelDebug:
+			levelColor = colorCyan
+		case slog.LevelInfo:
+			levelColor = colorGreen
+		case slog.LevelWarn:
+			levelColor = colorYellow
+		case slog.LevelError:
+			levelColor = colorRed
+		default:
+			levelColor = colorReset
+		}
 
-	buf := fmt.Sprintf("%s[%s]%s %s\n",
-		levelColor,
-		strings.ToUpper(r.Level.String()),
-		colorReset,
-		r.Message,
-	)
+		buf = fmt.Sprintf("%s[%s]%s %s\n",
+			levelColor,
+			strings.ToUpper(r.Level.String()),
+			colorReset,
+			r.Message,
+		)
+	} else {
+		buf = fmt.Sprintf("[%s] %s\n", strings.ToUpper(r.Level.String()), r.Message)
+	}
 
 	// Add attributes in debug mode
 	if h.level <= slog.LevelDebug && r.NumAttrs() > 0 {
-		buf += colorCyan
+		if h.color {
+			buf += colorCyan
+		}
 		r.Attrs(func(a slog.Attr) bool {
 			buf += fmt.Sprintf("  %s=%v", a.Key, a.Value)
 			return true
 		})
-		buf += colorReset + "\n"
+		if h.color {
+			buf += colorReset + "\n"
+		} else {
+			buf += "\n"
+		}
 	}
 
 	_, err := h.w.Write([]byte(buf))
@@ -374,25 +396,29 @@ func printBanner(addr, dbPath, supabaseURL string) {
 		fmt.Println(colorCyan + sep + colorReset)
 		fmt.Println(colorBold + "                    Log Management System" + colorReset)
 		fmt.Println(colorCyan + sep + colorReset)
+		fmt.Printf("%sVersion:%s %s\n", colorCyan, colorReset, version)
+		fmt.Printf("%sPlatform:%s %s / %s\n", colorCyan, colorReset, runtime.GOOS, runtime.GOARCH)
 	} else {
 		fmt.Println(sep)
 		fmt.Println("                    Log Management System")
 		fmt.Println(sep)
+		fmt.Printf("Version: %s\n", version)
+		fmt.Printf("Platform: %s / %s\n", runtime.GOOS, runtime.GOARCH)
 	}
-	fmt.Printf("%sVersion:%s %s\n", colorCyan, colorReset, version)
-	fmt.Printf("%sPlatform:%s %s / %s\n", colorCyan, colorReset, runtime.GOOS, runtime.GOARCH)
 	fmt.Println()
-	fmt.Printf("%sAddress:%s %s\n", colorCyan, colorReset, addr)
-	fmt.Printf("%sDatabase:%s %s\n", colorCyan, colorReset, dbPath)
-	if supabaseURL != "" {
-		fmt.Printf("%sSupabase:%s %s\n", colorCyan, colorReset, supabaseURL)
+	if isColor {
+		fmt.Printf("%sAddress:%s %s\n", colorCyan, colorReset, addr)
+		fmt.Printf("%sDatabase:%s %s\n", colorCyan, colorReset, dbPath)
+	} else {
+		fmt.Printf("Address: %s\n", addr)
+		fmt.Printf("Database: %s\n", dbPath)
 	}
 	fmt.Println()
 }
 
 func printSuccess(format string, args ...interface{}) {
 	if isTerminalColorSupported() {
-		fmt.Printf(colorGreen+"✓ "+format+colorReset+"\n", args...)
+		fmt.Printf(colorGreen+format+colorReset+"\n", args...)
 	} else {
 		fmt.Printf("[OK] "+format+"\n", args...)
 	}
@@ -400,7 +426,7 @@ func printSuccess(format string, args ...interface{}) {
 
 func printError(format string, args ...interface{}) {
 	if isTerminalColorSupported() {
-		fmt.Printf(colorRed+"✗ "+format+colorReset+"\n", args...)
+		fmt.Printf(colorRed+format+colorReset+"\n", args...)
 	} else {
 		fmt.Printf("[ERROR] "+format+"\n", args...)
 	}
@@ -408,7 +434,7 @@ func printError(format string, args ...interface{}) {
 
 func printWarn(format string, args ...interface{}) {
 	if isTerminalColorSupported() {
-		fmt.Printf(colorYellow+"⚠ "+format+colorReset+"\n", args...)
+		fmt.Printf(colorYellow+format+colorReset+"\n", args...)
 	} else {
 		fmt.Printf("[WARN] "+format+"\n", args...)
 	}
@@ -416,7 +442,7 @@ func printWarn(format string, args ...interface{}) {
 
 func printInfo(format string, args ...interface{}) {
 	if isTerminalColorSupported() {
-		fmt.Printf(colorCyan+"ℹ "+format+colorReset+"\n", args...)
+		fmt.Printf(colorCyan+format+colorReset+"\n", args...)
 	} else {
 		fmt.Printf("[INFO] "+format+"\n", args...)
 	}
@@ -433,7 +459,7 @@ func printReady(addr string) {
 	fmt.Println()
 	if isColor {
 		fmt.Println(colorGreen + "═══════════════════════════════════════════════════════════" + colorReset)
-		fmt.Println(colorBold + colorGreen + "                    ✓ Server Ready" + colorReset)
+		fmt.Println(colorBold + colorGreen + "                      Server Ready" + colorReset)
 		fmt.Println(colorGreen + "═══════════════════════════════════════════════════════════" + colorReset)
 		fmt.Println()
 		fmt.Printf("  %sAccess from this device:%s\n", colorBold, colorReset)
@@ -442,7 +468,7 @@ func printReady(addr string) {
 		fmt.Println()
 		if defaultIP != "" {
 			fmt.Printf("  %sAccess from other devices on the same network:%s\n", colorBold, colorReset)
-			fmt.Printf("    ✅ %shttp://%s:%s %s\n", colorCyan, defaultIP, port, colorReset)
+			fmt.Printf("    • %shttp://%s:%s %s\n", colorCyan, defaultIP, port, colorReset)
 			fmt.Println()
 			fmt.Printf("  %sOther detected IPs:%s\n", colorBold, colorReset)
 			for _, ip := range localIPs {
@@ -467,18 +493,17 @@ func printReady(addr string) {
 		fmt.Println(strings.Repeat("=", 63))
 		fmt.Println()
 		fmt.Println("  Access from this device:")
-		fmt.Printf("    • http://localhost:%s/search\n", port)
-		fmt.Printf("    • http://127.0.0.1:%s/search\n", port)
+		fmt.Printf("    • http://localhost:%s\n", port)
+		fmt.Printf("    • http://127.0.0.1:%s\n", port)
 		fmt.Println()
 		if defaultIP != "" {
 			fmt.Println("  Access from other devices on the same network:")
-			fmt.Printf("    ✅ http://%s:%s/search\n", defaultIP, port)
-			fmt.Printf("    ✅ http://%s:%s/new-log\n", defaultIP, port)
+			fmt.Printf("    • http://%s:%s\n", defaultIP, port)
 			fmt.Println()
 			fmt.Println("  Other detected IPs:")
 			for _, ip := range localIPs {
 				if ip != defaultIP {
-					fmt.Printf("    • http://%s:%s/search\n", ip, port)
+					fmt.Printf("    • http://%s:%s\n", ip, port)
 				}
 			}
 			fmt.Println()
@@ -571,20 +596,21 @@ func extractPort(addr string) string {
 	return ""
 }
 
+func detectColorSupport() bool {
+	// Standard convention: NO_COLOR present (any value) disables colors.
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	// TERM=dumb signals a terminal without ANSI support.
+	if strings.EqualFold(os.Getenv("TERM"), "dumb") {
+		return false
+	}
+	return consoleColorSupported()
+}
+
 func isTerminalColorSupported() bool {
-	// Check for common color-supporting terminals
-	term := os.Getenv("TERM")
-	if strings.Contains(term, "color") || strings.Contains(term, "xterm") ||
-		strings.Contains(term, "screen") || strings.Contains(term, "vt") {
-		return true
+	if noColor {
+		return false
 	}
-	// Windows 10+ with virtual terminal processing
-	if runtime.GOOS == "windows" {
-		return true // Modern Windows Terminal supports colors
-	}
-	// CI environments often support colors
-	if os.Getenv("CI") != "" {
-		return true
-	}
-	return false
+	return colorEnabled
 }

@@ -1,4 +1,6 @@
 {
     "supabase_url": "https://mcmwlrewaghkygwxmakw.supabase.co",
-    "supabase_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jbXdscmV3YWdoa3lnd3htYWt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzMwNjUsImV4cCI6MjA5OTg0OTA2NX0.CxtqVFcaW4a2Qi8nVBGn0Nx86s822FbKPUVb2UahPc0"
+    "supabase_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jbXdscmV3YWdoa3lnd3htYWt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNzMwNjUsImV4cCI6MjA5OTg0OTA2NX0.CxtqVFcaW4a2Qi8nVBGn0Nx86s822FbKPUVb2UahPc0",
+    "turso_url": "libsql://test-codenameamir.aws-ap-northeast-1.turso.io",
+    "turso_token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiIwZWNlN2NiMS0yYzliLTQwNWUtOTBmNi1mMjE5ZGExMDQ1MjQiLCJpYXQiOjE3ODMxNjM1OTIsImtpZCI6IjBzNTZfOGFGa3l3Q0tKX09nbG5WejFNdTUzQWp3TWRIdERZUmQtbkJHQjQiLCJyaWQiOiJmNjM0NjI3Yi1iNzBkLTQ1NWEtYTc0Yi02NDk2Njc2Y2U0ZDUifQ.F5XJjdcIRLHGsmmiKhZ3wZFZeKrv5yb8SKXDSEkDDP6G1ql1Tj1PSyTzBx3fk50RJdZK5MzzCxKIXaRyFgmaBw"
 }
