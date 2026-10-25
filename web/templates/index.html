@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Log Server</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/chart.umd.min.js"></script>
 <script>
 (function () {
   try {
@@ -1650,8 +1650,10 @@ tr.new-row{animation:flash .8s ease}
   // =========== Charts ===========
   const charts = {};
   let currentStatsSignature = '';
-  Chart.defaults.color = (document.documentElement.dataset.theme === 'light') ? '#666' : '#888';
-  Chart.defaults.borderColor = (document.documentElement.dataset.theme === 'light') ? '#d9d9de' : '#2a2a2a';
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.color = (document.documentElement.dataset.theme === 'light') ? '#666' : '#888';
+    Chart.defaults.borderColor = (document.documentElement.dataset.theme === 'light') ? '#d9d9de' : '#2a2a2a';
+  }
 
   function chartBorderColor() {
     return getComputedStyle(document.documentElement).getPropertyValue('--chart-border').trim() || '#1a1a1a';
@@ -1672,6 +1674,7 @@ tr.new-row{animation:flash .8s ease}
   }
 
   function renderCharts(s) {
+    if (typeof Chart === 'undefined') return;
     renderLevelChart(s);
     renderCatChart(s);
     renderDayChart(s);
@@ -2011,14 +2014,16 @@ tr.new-row{animation:flash .8s ease}
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('theme', theme); } catch (e) {}
     const light = isLightTheme(theme);
-    Chart.defaults.color = light ? '#666' : '#888';
-    Chart.defaults.borderColor = light ? '#d9d9de' : '#2a2a2a';
-    const cb = chartBorderColor();
-    for (const key of ['level', 'cat']) {
-      const c = charts[key];
-      if (!c) continue;
-      c.data.datasets.forEach(ds => { ds.borderColor = cb; });
-      c.update();
+    if (typeof Chart !== 'undefined') {
+      Chart.defaults.color = light ? '#666' : '#888';
+      Chart.defaults.borderColor = light ? '#d9d9de' : '#2a2a2a';
+      const cb = chartBorderColor();
+      for (const key of ['level', 'cat']) {
+        const c = charts[key];
+        if (!c) continue;
+        c.data.datasets.forEach(ds => { ds.borderColor = cb; });
+        c.update();
+      }
     }
     if (!$('#tabStats').classList.contains('hidden')) loadStats();
   }
